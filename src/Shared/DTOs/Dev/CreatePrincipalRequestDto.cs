@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Shared.DTOs.Authentication;
+namespace Shared.DTOs.Dev;
 
-public class RegisterRequestDto
+public class CreatePrincipalRequestDto
 {
     [Required]
     [EmailAddress]
@@ -18,10 +18,5 @@ public class RegisterRequestDto
     public string Password { get; set; }
 
     [Required]
-    [MinLength(1)]
-    public List<int> JobCategoryIds { get; set; } = new List<int>();
-
-    [Required]
-    [MinLength(1)]
-    public List<int> CourseIds { get; set; } = new List<int>();
+    public int JobCategoryId { get; set; }
 }
