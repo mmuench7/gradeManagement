@@ -1,14 +1,15 @@
 ﻿using API.Services.Abstract;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Shared.DTOs.GradeChangeRequest;
+using Shared.DTOs.GradeChangeRequests;
+using Shared.DTOs.Grades;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
 namespace API.Controllers;
 
 [ApiController]
-[Route("api/GradeChangeRequest")]
+[Route("api/gradechangerequest")]
 [Authorize]
 public class GCRController : ControllerBase
 {
@@ -19,154 +20,202 @@ public class GCRController : ControllerBase
         _gcrService = gcrService;
     }
 
-    [HttpPost]
-    [Authorize(Roles = "Teacher")]
-    public async Task<IActionResult> Create([FromBody] CreateGCRDTO dto)
+    private int UserId
     {
-        int? teacherId = GetUserIdFromJwt();
-        if (teacherId == null)
+        get
         {
-            return Unauthorized("Missing user id in token.");
-        }
-
-        int? requestId = await _gcrService.CreateAsync(teacherId.Value, dto);
-
-        if (requestId == null)
-        {
-            return BadRequest("Could not create grade change request.");
-        }
-
-        return CreatedAtAction(nameof(GetById), new { id = requestId.Value }, new { id = requestId.Value });
-    }
-
-    [HttpGet("mine")]
-    [Authorize(Roles = "Teacher")]
-    public async Task<ActionResult<List<GCRDTO>>> GetMine()
-    {
-        int? teacherId = GetUserIdFromJwt();
-        if (teacherId == null)
-        {
-            return Unauthorized("Missing user id in token.");
-        }
-
-        List<GCRDTO> items = await _gcrService.GetMineAsync(teacherId.Value);
-        return Ok(items);
-    }
-
-    [HttpGet("pending")]
-    [Authorize(Roles = "Principal")]
-    public async Task<ActionResult<List<GCRDTO>>> GetPending()
-    {
-        int? principalId = GetUserIdFromJwt();
-        if (principalId == null)
-        {
-            return Unauthorized("Missing user id in token.");
-        }
-
-        List<GCRDTO> items = await _gcrService.GetPendingForPrincipalAsync(principalId.Value);
-        return Ok(items);
-    }
-
-    [HttpPost("{id:int}/approve")]
-    [Authorize(Roles = "Principal")]
-    public async Task<IActionResult> Approve([FromRoute] int id)
-    {
-        int? principalId = GetUserIdFromJwt();
-        if (principalId == null)
-        {
-            return Unauthorized("Missing user id in token.");
-        }
-
-        bool ok = await _gcrService.ApproveAsync(principalId.Value, id);
-
-        if (!ok)
-        {
-            return Conflict("Could not approve this request.");
-        }
-
-        return NoContent();
-    }
-
-    [HttpPost("{id:int}/reject")]
-    [Authorize(Roles = "Principal")]
-    public async Task<IActionResult> Reject(int id, [FromBody] RejectGCRDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        int? principalId = GetUserIdFromJwt();
-        if (principalId == null)
-        {
-            return Unauthorized();
-        }
-
-        bool ok = await _gcrService.RejectAsync(principalId.Value, id, dto.RejectionReason);
-        return ok ? NoContent() : Conflict("Could not reject this request.");
-    }
-
-    [HttpGet("{id:int}")]
-    [Authorize(Roles = "Teacher,Principal")]
-    public async Task<ActionResult<GCRDTO>> GetById([FromRoute] int id)
-    {
-        int? userId = GetUserIdFromJwt();
-        if (userId == null)
-        {
-            return Unauthorized("Missing user id in token.");
-        }
-
-        GCRDTO? dto = await _gcrService.GetByIdAsync(id);
-        if (dto == null)
-        {
-            return NotFound();
-        }
-
-        if (User.IsInRole("Teacher"))
-        {
-            if (dto.TeacherId != userId.Value)
+            string? raw = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            if (string.IsNullOrWhiteSpace(raw) || !int.TryParse(raw, out int id))
             {
-                return Forbid();
+                throw new InvalidOperationException("Could not extract id from token.");
             }
-        }
-        else if (User.IsInRole("Principal"))
-        {
-            if (dto.PrincipalId != userId.Value)
-            {
-                return Forbid();
-            }
-        }
-        else
-        {
-            return Forbid();
-        }
 
-        return Ok(dto);
-    }
-
-    [HttpGet("history")]
-    [Authorize(Roles = "Principal")]
-    public async Task<ActionResult<List<GCRDTO>>> GetHistory()
-    {
-        int? principalId = GetUserIdFromJwt();
-        if (principalId == null)
-        {
-            return Unauthorized();
-        }
-
-        var items = await _gcrService.GetHistoryForPrincipalAsync(principalId.Value);
-        return Ok(items);
-    }
-
-    private int? GetUserIdFromJwt()
-    {
-        string? sub = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (int.TryParse(sub, out int id))
-        {
             return id;
         }
+    }
 
-        return null;
+    [HttpPost]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> Create([FromBody] CreateGradeChangeRequestDto dto)
+    {
+        IGCRService.Result<GradeChangeRequestResponseDto> result = await _gcrService.CreateAsync(UserId, dto);
+
+        switch (result.Error)
+        {
+            case IGCRService.Error.None:
+                return Created("", result.Data);
+
+            case IGCRService.Error.InvalidInput:
+                return BadRequest(new
+                {
+                    code = "INVALID_INPUT",
+                    message = "Invalid input."
+                });
+
+            case IGCRService.Error.GradeNotFound:
+                return NotFound(new
+                {
+                    code = "GRADE_NOT_FOUND",
+                    message = "Grade not found."
+                });
+
+            case IGCRService.Error.PrincipalNotFound:
+                return NotFound(new
+                {
+                    code = "PRINCIPAL_NOT_FOUND",
+                    message = "Assigned principal not found."
+                });
+
+            case IGCRService.Error.Forbidden:
+                return Forbid();
+
+            case IGCRService.Error.AlreadyPending:
+                return Conflict(new
+                {
+                    code = "ALREADY_PENDING",
+                    message = "There is already a pending request for this grade."
+                });
+
+            default:
+                if (HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        code = "FETCH_FAILED",
+                        message = "Internal server error.",
+                        details = result.Details
+                    });
+                }
+
+                return StatusCode(500, new
+                {
+                    code = "FETCH_FAILED",
+                    message = "Internal server error."
+                });
+        }
+    }
+
+    [HttpGet("teacher/pending")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> GetTeacherPending()
+    {
+        IGCRService.Result<List<GradeChangeRequestResponseDto>> result = await _gcrService.GetTeacherPendingAsync(UserId);
+
+        switch (result.Error)
+        {
+            case IGCRService.Error.None:
+                return Ok(result.Data);
+
+            default:
+                return StatusCode(500, new
+                {
+                    code = "FETCH_FAILED",
+                    message = "Internal server error."
+                });
+        }
+    }
+
+    [HttpGet("teacher/reviewed")]
+    [Authorize(Roles = "Teacher")]
+    public async Task<IActionResult> GetTeacherReviewed()
+    {
+        IGCRService.Result<List<GradeChangeRequestResponseDto>> result = await _gcrService.GetTeacherReviewedAsync(UserId);
+
+        switch (result.Error)
+        {
+            case IGCRService.Error.None:
+                return Ok(result.Data);
+
+            default:
+                return StatusCode(500, new
+                {
+                    code = "FETCH_FAILED",
+                    message = "Internal server error."
+                });
+        }
+    }
+
+    [HttpGet("principal/pending")]
+    [Authorize(Roles = "Principal")]
+    public async Task<IActionResult> GetPrincipalPending()
+    {
+        IGCRService.Result<List<GradeChangeRequestResponseDto>> result = await _gcrService.GetPrincipalPendingAsync(UserId);
+
+        switch (result.Error)
+        {
+            case IGCRService.Error.None:
+                return Ok(result.Data);
+
+            default:
+                return StatusCode(500, new
+                {
+                    code = "FETCH_FAILED",
+                    message = "Internal server error."
+                });
+        }
+    }
+
+    [HttpGet("principal/reviewed")]
+    [Authorize(Roles = "Principal")]
+    public async Task<IActionResult> GetPrincipalReviewed()
+    {
+        IGCRService.Result<List<GradeChangeRequestResponseDto>> result = await _gcrService.GetPrincipalReviewedAsync(UserId);
+
+        switch (result.Error)
+        {
+            case IGCRService.Error.None:
+                return Ok(result.Data);
+
+            default:
+                return StatusCode(500, new
+                {
+                    code = "FETCH_FAILED",
+                    message = "Internal server error."
+                });
+        }
+    }
+
+    [HttpPost("{id:int}/review")]
+    [Authorize(Roles = "Principal")]
+    public async Task<IActionResult> Review([FromRoute] int id, [FromBody] ReviewGradeChangeRequestDto dto)
+    {
+        IGCRService.Result<GradeChangeRequestResponseDto> result = await _gcrService.ReviewAsync(UserId, id, dto);
+
+        switch (result.Error)
+        {
+            case IGCRService.Error.None:
+                return Ok(result.Data);
+
+            case IGCRService.Error.InvalidInput:
+                return BadRequest(new
+                {
+                    code = "IVALID_INPUT",
+                    message = "Invalid input."
+                });
+
+            case IGCRService.Error.NotFound:
+                return NotFound(new
+                {
+                    code = "REQUEST_NOT_FOUND",
+                    message = "Grade change request not found."
+                });
+
+            case IGCRService.Error.Forbidden:
+                return Forbid();
+
+            case IGCRService.Error.NotPendingAnymore:
+                return Conflict(new
+                {
+                    code = "NOT_PENDING",
+                    message = "Request is not pending anymore."
+                });
+
+            default:
+                return StatusCode(500, new
+                {
+                    code = "REVIEW_FAILED",
+                    message = "Internal server error."
+                });
+        }
     }
 }

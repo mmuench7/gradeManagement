@@ -1,209 +1,304 @@
-﻿using System.IdentityModel.Tokens.Jwt;
-using System.Net.Mail;
-using System.Security.Claims;
-using System.Text;
+﻿using API.DataAccess;
 using API.DataAccess.Models;
+using API.DataAccess.ModelsM;
 using API.DataAccess.Repositories.Abstract;
 using API.Services.Abstract;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.IdentityModel.Tokens;
 using Shared.DTOs.Authentication;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace API.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly IAuthRepository _authRepository;
-    private readonly IConfiguration _config;
+    private readonly ITeacherRepository _teacherRepository;
+    private readonly IConfiguration _configuration;
+    private readonly IJobCategoryRepository _jobCategoryRepository;
+    private readonly ITJCRepository _tjcRepository;
+    private readonly IPrincipalRepository _principalRepository;
+    private readonly ICourseRepository _courseRepository;
+    private readonly ITCRepository _tcRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
-    private readonly PasswordHasher<PasswordHashUser> _passwordHasher = new();
+    public record AuthResult(
+        bool Success,
+        AuthError Error,
+        AuthResponseDto? Data = null,
+        object? Details = null
+        );
 
-    public AuthService(IAuthRepository authRepository, IConfiguration config)
+    public enum AuthError
     {
-        _authRepository = authRepository;
-        _config = config;
+        None,
+        InvalidCredentials,
+        EmailAlreadyExists,
+        InvalidJobCategories,
+        NoDataProvided,
+        InvalidEmailDomain,
+        InvalidCourses,
+        CoursesDoNotMatchJobCategories,
+        MissingCoursesForJobCategories,
+        Failed
     }
 
-    public async Task<AuthResponseDTO?> RegisterAsync(RegisterRequestDTO requestDTO)
+    public enum UserType
     {
-        string? allowedDomain = _config["AllowedAccountDomain"];
-        if (!IsAllowedDomain(requestDTO.Email, allowedDomain))
-        {
-            return null;
-        }
-
-        if (await _authRepository.GetTeacherByEmailAsync(requestDTO.Email) != null)
-        {
-            return null;
-        }
-
-        if (await _authRepository.GetPrincipalByEmailAsync(requestDTO.Email) != null)
-        {
-            return null;
-        }
-
-        string hash = _passwordHasher.HashPassword(
-            new PasswordHashUser(requestDTO.Email),
-            requestDTO.Password
-        );
-
-        int teacherId = await _authRepository.CreateTeacherAsync(
-            requestDTO.Email,
-            requestDTO.FirstName,
-            requestDTO.LastName,
-            hash
-        );
-
-        await _authRepository.AddTeacherJobCategoryAsync(teacherId, requestDTO.JobCategoryId);
-
-        (string token, DateTime expiresAtUtc) = CreateJwtToken(
-            teacherId,
-            requestDTO.Email,
-            requestDTO.FirstName,
-            requestDTO.LastName,
-            "Teacher"
-        );
-
-        return new AuthResponseDTO
-        {
-            Token = token,
-            ExpiresAtUtc = expiresAtUtc,
-            Role = "Teacher",
-            UserId = teacherId,
-            Email = requestDTO.Email,
-            FirstName = requestDTO.FirstName,
-            LastName = requestDTO.LastName
-        };
+        Teacher,
+        Principal
     }
 
-    public async Task<AuthResponseDTO?> LoginAsync(LoginRequestDTO requestDTO)
+    public AuthService(
+        ITeacherRepository teacherRepository,
+        IConfiguration configuration,
+        IJobCategoryRepository jobCategoryRepository,
+        ITJCRepository tjcRepository,
+        IPrincipalRepository principalRepository,
+        ICourseRepository courseRepository,
+        ITCRepository tcRepository,
+        IUnitOfWork unitOfWork)
     {
-        string? allowedDomain = _config["AllowedAccountDomain"];
-        if (!IsAllowedDomain(requestDTO.Email, allowedDomain))
+        _teacherRepository = teacherRepository;
+        _configuration = configuration;
+        _jobCategoryRepository = jobCategoryRepository;
+        _tjcRepository = tjcRepository;
+        _principalRepository = principalRepository;
+        _courseRepository = courseRepository;
+        _tcRepository = tcRepository;
+        _unitOfWork = unitOfWork;
+    }
+
+    public async Task<AuthResult> RegisterAsync(RegisterRequestDto requestDto)
+    {
+        if (await _teacherRepository.ExistsByEmailAsync(requestDto.Email) ||
+            await _principalRepository.ExistsByEmailAsync(requestDto.Email))
         {
-            return null;
+            return new(false, AuthError.EmailAlreadyExists);
+        }
+        if (string.IsNullOrWhiteSpace(requestDto.Password) ||
+                 string.IsNullOrWhiteSpace(requestDto.Email))
+        {
+            return new(false, AuthError.NoDataProvided);
+        }
+        if (!requestDto.Email.EndsWith("@gibz.ch", StringComparison.OrdinalIgnoreCase))
+        {
+            return new(false, AuthError.InvalidEmailDomain);
         }
 
-        Teacher? teacher = await _authRepository.GetTeacherByEmailAsync(requestDTO.Email);
+        List<int> jobCategoryIds = requestDto.JobCategoryIds?
+            .Distinct()
+            .ToList() ?? new List<int>();
+        if (jobCategoryIds.Count == 0)
+        {
+            return new(false, AuthError.InvalidJobCategories);
+        }
+
+        int existingJobCategoriesCount = await _jobCategoryRepository.CountExistingAsync(jobCategoryIds);
+        if (existingJobCategoriesCount != jobCategoryIds.Count)
+        {
+            return new(false, AuthError.InvalidJobCategories);
+        }
+
+        List<int> courseIds = requestDto.CourseIds?
+            .Distinct()
+            .ToList() ?? new List<int>();
+        if (courseIds.Count == 0)
+        {
+            return new(false, AuthError.InvalidCourses);
+        }
+
+        int existingCoursesCount = await _courseRepository.CountExistingAsync(courseIds);
+        if (existingCoursesCount != courseIds.Count)
+        {
+            return new(false, AuthError.InvalidCourses);
+        }
+
+        int validCoursesForCategoriesCount = await _courseRepository.CountExistingForJobCategoriesAsync(courseIds, jobCategoryIds);
+        if (validCoursesForCategoriesCount != courseIds.Count)
+        {
+            return new(false, AuthError.CoursesDoNotMatchJobCategories);
+        }
+
+        int coveredCategoryCount = await _courseRepository.CountJobCategoriesCoveredByCoursesAsync(courseIds, jobCategoryIds);
+        if (coveredCategoryCount != jobCategoryIds.Count)
+        {
+            List<int> missingCategoryIds = await _courseRepository.GetMissingJobCategoryIdsAsync(courseIds, jobCategoryIds);
+            if (missingCategoryIds.Count > 0)
+            {
+                Dictionary<int, string> names = await _jobCategoryRepository.GetNamesByIdsAsync(missingCategoryIds);
+                
+                return new(false, AuthError.MissingCoursesForJobCategories, null, new
+                {
+                    missingJobCategories = names.Select(kv => new { id = kv.Key, name = kv.Value }).ToList()
+                });
+            }
+        }
+
+        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx = await _unitOfWork.BeginTransactionAsync();
+        try
+        {
+            string salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(128));
+            string hash = BuildHash(requestDto.Password, salt);
+
+            Teacher teacher = new Teacher
+            {
+                Email = requestDto.Email,
+                FirstName = requestDto.FirstName,
+                LastName = requestDto.LastName,
+                PasswordHash = hash,
+                PasswordSalt = salt
+            };
+            await _teacherRepository.AddAsync(teacher);
+            await _unitOfWork.SaveChangesAsync();
+
+            IEnumerable<TeacherJobCategory> teacherJobCategoryLinks = jobCategoryIds.Select(id => new TeacherJobCategory
+            {
+                TeacherId = teacher.Id,
+                JobCategoryId = id
+            });
+            await _tjcRepository.AddRangeAsync(teacherJobCategoryLinks);
+
+            IEnumerable<TeacherCourse> teacherCourseLinks = courseIds.Select(courseId => new TeacherCourse
+            {
+                TeacherId = teacher.Id,
+                CourseId = courseId
+            });
+            await _tcRepository.AddRangeAsync(teacherCourseLinks);
+
+            await _unitOfWork.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return await AuthenticateAsync(requestDto.Email, requestDto.Password);
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            return new(
+                false,
+                AuthError.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                });
+        }
+    }
+
+    public async Task<AuthResult> LoginAsync(LoginRequestDto requestDto)
+    {
+        return await AuthenticateAsync(requestDto.Email, requestDto.Password);
+    }
+
+    private async Task<AuthResult> AuthenticateAsync(string email, string password)
+    {
+        if (string.IsNullOrWhiteSpace(email) ||
+            string.IsNullOrWhiteSpace(password))
+        {
+            return new(false, AuthError.NoDataProvided);
+        }
+
+        email = email.Trim();
+
+        Teacher teacher = await _teacherRepository.GetByEmailAsync(email);
         if (teacher != null)
         {
-            if (!VerifyPassword(teacher.Email, teacher.PasswordHash, requestDTO.Password))
+            if (!VerifyPassword(password, teacher.PasswordSalt, teacher.PasswordHash))
             {
-                return null;
+                return new(false, AuthError.InvalidCredentials);
             }
 
-            (string token, DateTime expiresAtUtc) = CreateJwtToken(
-                teacher.Id,
-                teacher.Email,
-                teacher.FirstName,
-                teacher.LastName,
-                teacher.Role
+            string token = GenerateJwtToken(
+                userId: teacher.Id,
+                email: teacher.Email,
+                fullName: $"{teacher.FirstName} {teacher.LastName}",
+                userType: UserType.Teacher
             );
 
-            return new AuthResponseDTO
+            return new(true, AuthError.None, new AuthResponseDto
             {
-                Token = token,
-                ExpiresAtUtc = expiresAtUtc,
-                Role = teacher.Role,
-                UserId = teacher.Id,
-                Email = teacher.Email,
-                FirstName = teacher.FirstName,
-                LastName = teacher.LastName
-            };
+                JwtToken = token,
+                UserType = UserType.Teacher.ToString()
+            });
         }
 
-        Principal? principal = await _authRepository.GetPrincipalByEmailAsync(requestDTO.Email);
+        Principal principal = await _principalRepository.GetByEmailAsync(email);
         if (principal != null)
         {
-            if (!VerifyPassword(principal.Email, principal.PasswordHash, requestDTO.Password))
+            if (!VerifyPassword(password, principal.PasswordSalt, principal.PasswordHash))
             {
-                return null;
+                return new(false, AuthError.InvalidCredentials);
             }
 
-            (string token, DateTime expiresAtUtc) = CreateJwtToken(
-                principal.Id,
-                principal.Email,
-                principal.FirstName,
-                principal.LastName,
-                principal.Role
+            string token = GenerateJwtToken(
+                userId: principal.Id,
+                email: principal.Email,
+                fullName: $"{principal.FirstName} {principal.LastName}",
+                userType: UserType.Principal
             );
 
-            return new AuthResponseDTO
+            return new(true, AuthError.None, new AuthResponseDto
             {
-                Token = token,
-                ExpiresAtUtc = expiresAtUtc,
-                Role = principal.Role,
-                UserId = principal.Id,
-                Email = principal.Email,
-                FirstName = principal.FirstName,
-                LastName = principal.LastName
-            };
+                JwtToken = token,
+                UserType = UserType.Principal.ToString()
+            });
         }
 
-        return null;
+        return new(false, AuthError.InvalidCredentials);
     }
 
-    private bool VerifyPassword(string email, string passwordHash, string password)
+    private static bool VerifyPassword(string password, string salt, string expectedHash)
     {
-        PasswordVerificationResult result = _passwordHasher.VerifyHashedPassword(
-            new PasswordHashUser(email),
-            passwordHash,
-            password
-        );
+        string hash = BuildHash(password, salt);
 
-        return result != PasswordVerificationResult.Failed;
+        return CryptographicOperations.FixedTimeEquals(
+            Convert.FromBase64String(hash),
+            Convert.FromBase64String(expectedHash));
     }
 
-    private (string token, DateTime expiresAtUtc) CreateJwtToken(int userId, string email, string firstName, string lastName, string role)
+    private string GenerateJwtToken(int userId, string email, string fullName, UserType userType)
     {
         JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
 
-        byte[] key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]!);
+        byte[] key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]);
 
         Claim[] claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, email),
-            new Claim(JwtRegisteredClaimNames.Name, $"{firstName} {lastName}"),
-            new Claim(ClaimTypes.Role, role)
+            new Claim(JwtRegisteredClaimNames.Name, fullName),
+            new Claim("role", userType.ToString()),
+            new("userType", userType.ToString())
         };
-
-        int expiresMinutes = int.Parse(_config["Jwt:ExpiresMinutes"]!);
-        DateTime expiresAtUtc = DateTime.UtcNow.AddMinutes(expiresMinutes);
 
         SecurityTokenDescriptor tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            Expires = expiresAtUtc,
-            Issuer = _config["Jwt:Issuer"],
-            Audience = _config["Jwt:Audience"],
+            Expires = DateTime.UtcNow.AddMinutes(30),
+            Issuer = _configuration["Jwt:Issuer"],
+            Audience = _configuration["Jwt:Audience"],
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(key),
                 SecurityAlgorithms.HmacSha256Signature
-            )
+                )
         };
 
         SecurityToken token = tokenHandler.CreateToken(tokenDescriptor);
-        return (tokenHandler.WriteToken(token), expiresAtUtc);
+        return tokenHandler.WriteToken(token);
     }
 
-    private static bool IsAllowedDomain(string email, string? allowedDomain)
+    public static string BuildHash(string password, string salt)
     {
-        if (string.IsNullOrWhiteSpace(allowedDomain))
-        {
-            return false;
-        }
-
-        try
-        {
-            MailAddress address = new MailAddress(email);
-            return string.Equals(address.Host, allowedDomain, StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return false;
-        }
+        return Convert.ToBase64String(KeyDerivation.Pbkdf2(
+            password: password,
+            salt: Convert.FromBase64String(salt),
+            prf: KeyDerivationPrf.HMACSHA256,
+            iterationCount: 100000,
+            numBytesRequested: 256 / 8
+            ));
     }
-
-    private sealed record PasswordHashUser(string Email);
 }

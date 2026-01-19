@@ -4,7 +4,7 @@ public class Grade
 {
     public int Id { get; set; }
 
-    public decimal GradeValue { get; set; }
+    public decimal Value { get; set; }
 
     public DateTime ExamDate { get; set; }
 
@@ -14,5 +14,7 @@ public class Grade
 
     public int CourseId { get; set; }
 
-    public int? TeacherId { get; set; }
+    public int TeacherId { get; set; }
+
+    public ICollection<GradeChangeRequest> GradeChangeRequests { get; set; } = new List<GradeChangeRequest>();
 }

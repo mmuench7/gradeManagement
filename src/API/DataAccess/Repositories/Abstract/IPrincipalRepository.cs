@@ -4,7 +4,9 @@ namespace API.DataAccess.Repositories.Abstract;
 
 public interface IPrincipalRepository
 {
-    Task<Principal?> GetByIdAsync(int id);
+    Task<Principal?> GetByEmailAsync(string email);
 
-    Task<Principal?> GetByJobCategoryIdAsync(int jobCategoryId);
+    Task<bool> ExistsByEmailAsync(string email);
+
+    Task AddAsync(Principal principal);
 }

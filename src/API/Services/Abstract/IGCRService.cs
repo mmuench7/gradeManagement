@@ -1,20 +1,38 @@
-﻿using Shared.DTOs.GradeChangeRequest;
+﻿using Shared.DTOs.GradeChangeRequests;
+using Shared.DTOs.Grades;
 
 namespace API.Services.Abstract;
 
 public interface IGCRService
 {
-    Task<int?> CreateAsync(int teacherId, CreateGCRDTO dto);
+    Task<Result<GradeChangeRequestResponseDto>> CreateAsync(int teacherId, CreateGradeChangeRequestDto dto);
 
-    Task<GCRDTO?> GetByIdAsync(int requestId);
+    Task<Result<List<GradeChangeRequestResponseDto>>> GetTeacherPendingAsync(int teacherId);
 
-    Task<List<GCRDTO>> GetMineAsync(int teacherId);
+    Task<Result<List<GradeChangeRequestResponseDto>>> GetTeacherReviewedAsync(int teacherId);
 
-    Task<List<GCRDTO>> GetPendingForPrincipalAsync(int principalId);
+    Task<Result<List<GradeChangeRequestResponseDto>>> GetPrincipalPendingAsync(int principalId);
 
-    Task<List<GCRDTO>> GetHistoryForPrincipalAsync(int principalId);
+    Task<Result<List<GradeChangeRequestResponseDto>>> GetPrincipalReviewedAsync(int principalId);
 
-    Task<bool> ApproveAsync(int principalId, int requestId);
+    Task<Result<GradeChangeRequestResponseDto>> ReviewAsync(int principalId, int requestId, ReviewGradeChangeRequestDto dto);
 
-    Task<bool> RejectAsync(int principalId, int requestId, string rejectionReason);
+    public record Result<T>(
+        bool Success,
+        Error Error,
+        T? Data = default,
+        Object? Details = null);
+
+    public enum Error
+    {
+        None,
+        InvalidInput,
+        GradeNotFound,
+        Forbidden,
+        AlreadyPending,
+        PrincipalNotFound,
+        Failed,
+        NotFound,
+        NotPendingAnymore
+    }
 }

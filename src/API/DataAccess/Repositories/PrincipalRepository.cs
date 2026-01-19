@@ -13,13 +13,18 @@ public class PrincipalRepository : IPrincipalRepository
         _dbContext = dbContext;
     }
 
-    public async Task<Principal?> GetByIdAsync(int id)
+    public async Task<bool> ExistsByEmailAsync(string email)
     {
-        return await _dbContext.Principal.FirstOrDefaultAsync(p => p.Id == id);
+        return await _dbContext.Principal.AnyAsync(p => p.Email == email);
     }
 
-    public async Task<Principal?> GetByJobCategoryIdAsync(int jobCategoryId)
+    public async Task<Principal?> GetByEmailAsync(string email)
     {
-        return await _dbContext.Principal.FirstOrDefaultAsync(p => p.JobCategoryId == jobCategoryId);
+        return await _dbContext.Principal.SingleOrDefaultAsync(p => p.Email == email);
+    }
+
+    public async Task AddAsync(Principal principal)
+    {
+        await _dbContext.Principal.AddAsync(principal).AsTask();
     }
 }

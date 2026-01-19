@@ -13,16 +13,18 @@ public class TeacherRepository : ITeacherRepository
         _dbContext = dbContext;
     }
 
-    public async Task<Teacher?> GetByIdAsync(int id)
+    public async Task<bool> ExistsByEmailAsync(string email)
     {
-        return await _dbContext.Teacher.FirstOrDefaultAsync(t => t.Id == id);
+        return await _dbContext.Teacher.AnyAsync(t  => t.Email == email);
     }
 
-    public async Task<List<int>> GetJobCategoryIdsAsync(int teacherId)
+    public async Task AddAsync(Teacher teacher)
     {
-        return await _dbContext.TeacherJobCategory
-            .Where(x => x.TeacherId == teacherId)
-            .Select(x => x.JobCategoryId)
-            .ToListAsync();
+        await _dbContext.Teacher.AddAsync(teacher).AsTask(); 
+    }
+
+    public async Task<Teacher?> GetByEmailAsync(string email)
+    {
+        return await _dbContext.Teacher.SingleOrDefaultAsync(t => t.Email == email);
     }
 }

@@ -1,182 +1,253 @@
 ﻿using API.DataAccess.Models;
 using API.DataAccess.Repositories.Abstract;
 using API.Services.Abstract;
-using Shared.DTOs.GradeChangeRequest;
+using Shared.DTOs.GradeChangeRequests;
+using Shared.DTOs.Grades;
 
 namespace API.Services;
 
 public class GCRService : IGCRService
 {
-    private readonly IGCRRepository _requestRepo;
-    private readonly IGradeRepository _gradeRepo;
-    private readonly ITeacherRepository _teacherRepo;
-    private readonly IPrincipalRepository _principalRepo;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IGradeRepository _gradeRepository;
+    private readonly IGCRRepository _gcrRepository;
 
     public GCRService(
-        IGCRRepository requestRepo,
-        IGradeRepository gradeRepo,
-        ITeacherRepository teacherRepo,
-        IPrincipalRepository principalRepo)
+        IUnitOfWork unitOfWork,
+        IGradeRepository gradeRepository,
+        IGCRRepository gcrRepository)
     {
-        _requestRepo = requestRepo;
-        _gradeRepo = gradeRepo;
-        _teacherRepo = teacherRepo;
-        _principalRepo = principalRepo;
+        _unitOfWork = unitOfWork;
+        _gradeRepository = gradeRepository;
+        _gcrRepository = gcrRepository;
     }
 
-    public async Task<int?> CreateAsync(int teacherId, CreateGCRDTO dto)
+    public async Task<IGCRService.Result<GradeChangeRequestResponseDto>> CreateAsync(int teacherId, CreateGradeChangeRequestDto dto)
     {
-        // Teacher must exist
-        Teacher? teacher = await _teacherRepo.GetByIdAsync(teacherId);
-        if (teacher == null)
-            return null;
-
-        // Grade must exist
-        Grade? grade = await _gradeRepo.GetByIdAsync(dto.GradeId);
-        if (grade == null)
-            return null;
-
-        // Prevent duplicate pending request for the same grade (optional improvement you added)
-        GradeChangeRequest? existingPending = await _requestRepo.GetPendingByGradeIdAsync(grade.Id);
-        if (existingPending != null)
-            return null;
-
-        // Teacher may only request changes for their own grades
-        if (grade.TeacherId == null || grade.TeacherId != teacherId)
-            return null;
-
-        // Validate requested grade range
-        if (dto.RequestedGradeValue < 1.0m || dto.RequestedGradeValue > 6.0m)
-            return null;
-
-        // Teacher can have 1 or 2 job categories via join table
-        List<int> categoryIds = await _teacherRepo.GetJobCategoryIdsAsync(teacherId);
-        if (categoryIds.Count == 0)
-            return null;
-
-        // TEMP RULE:
-        // If teacher has 2 categories, pick one deterministically (lowest id).
-        // Better routing is: grade -> course -> course.JobCategoryId -> principal (if you have that column).
-        int chosenCategoryId = categoryIds.OrderBy(x => x).First();
-
-        // Find principal for that category
-        Principal? principal = await _principalRepo.GetByJobCategoryIdAsync(chosenCategoryId);
-        if (principal == null)
-            return null;
+        if (dto is null ||
+            dto.GradeId <= 0 ||
+            string.IsNullOrWhiteSpace(dto.Reason))
+        {
+            return new(false, IGCRService.Error.InvalidInput);
+        }
+        if (dto.RequestedGradeValue < 1 || dto.RequestedGradeValue > 6)
+        {
+            return new(false, IGCRService.Error.InvalidInput);
+        }
+        (int TeacherId, int CourseId, decimal GradeValue)? basics = await _gradeRepository.GetBasicsAsync(dto.GradeId);
+        if (basics is null)
+        {
+            return new(false, IGCRService.Error.GradeNotFound);
+        }
+        (int gradeTeacherId, int courseId, decimal originalValue) = basics.Value;
+        if (gradeTeacherId != teacherId)
+        {
+            return new(false, IGCRService.Error.Forbidden);
+        }
+        if (await _gcrRepository.AnyPendingForGradeAsync(dto.GradeId))
+        {
+            return new(false, IGCRService.Error.AlreadyPending);
+        }
+        int? principalId = await _gradeRepository.GetAssignedPrincipalIdByGradeIdAsync(dto.GradeId);
+        if (principalId is null || principalId.Value <= 0)
+        {
+            return new(false, IGCRService.Error.PrincipalNotFound);
+        }
 
         GradeChangeRequest request = new GradeChangeRequest
         {
-            GradeId = grade.Id,
-            TeacherId = teacher.Id,
-            PrincipalId = principal.Id,
-            OriginalGradeValue = grade.GradeValue,
+            GradeId = dto.GradeId,
+            TeacherId = teacherId,
+            PrincipalId = principalId.Value,
+            OriginalGradeValue = originalValue,
             RequestedGradeValue = dto.RequestedGradeValue,
-            Reason = dto.Reason,
-            Status = "Pending",
+            Reason = dto.Reason.Trim(),
+            PrincipalComment = null,
+            Status = GradeChangeRequestStatus.Pending,
             CreatedAt = DateTime.UtcNow,
-            ReviewedAt = null,
-            RejectionReason = null
+            ReviewedAt = null
         };
 
-        int id = await _requestRepo.CreateAsync(request);
-        return id;
-    }
-
-    public async Task<GCRDTO?> GetByIdAsync(int requestId)
-    {
-        GradeChangeRequest? request = await _requestRepo.GetByIdAsync(requestId);
-        if (request == null)
-            return null;
-
-        return MapToDto(request);
-    }
-
-    public async Task<List<GCRDTO>> GetMineAsync(int teacherId)
-    {
-        List<GradeChangeRequest> items = await _requestRepo.GetByTeacherIdAsync(teacherId);
-        return items.Select(MapToDto).ToList();
-    }
-
-    public async Task<List<GCRDTO>> GetPendingForPrincipalAsync(int principalId)
-    {
-        List<GradeChangeRequest> items = await _requestRepo.GetPendingByPrincipalIdAsync(principalId);
-        return items.Select(MapToDto).ToList();
-    }
-
-    public async Task<List<GCRDTO>> GetHistoryForPrincipalAsync(int principalId)
-    {
-        List<GradeChangeRequest> items = await _requestRepo.GetHistoryByPrincipalIdAsync(principalId);
-        return items.Select(MapToDto).ToList();
-    }
-
-    public async Task<bool> ApproveAsync(int principalId, int requestId)
-    {
-        GradeChangeRequest? request = await _requestRepo.GetByIdAsync(requestId);
-        if (request == null)
-            return false;
-
-        if (request.PrincipalId != principalId)
-            return false;
-
-        if (request.Status != "Pending")
-            return false;
-
-        Grade? grade = await _gradeRepo.GetByIdAsync(request.GradeId);
-        if (grade == null)
-            return false;
-
-        // Optimistic check: grade must still match what it was when the request was created
-        if (grade.GradeValue != request.OriginalGradeValue)
-            return false;
-
-        // Apply grade change
-        grade.GradeValue = request.RequestedGradeValue;
-        await _gradeRepo.UpdateAsync(grade);
-
-        // Update request status
-        request.Status = "Approved";
-        request.ReviewedAt = DateTime.UtcNow;
-        request.RejectionReason = null;
-
-        await _requestRepo.UpdateAsync(request);
-        return true;
-    }
-
-    public async Task<bool> RejectAsync(int principalId, int requestId, string rejectionReason)
-    {
-        GradeChangeRequest? request = await _requestRepo.GetByIdAsync(requestId);
-        if (request == null)
-            return false;
-
-        if (request.PrincipalId != principalId)
-            return false;
-
-        if (request.Status != "Pending")
-            return false;
-
-        request.Status = "Rejected";
-        request.RejectionReason = rejectionReason;
-        request.ReviewedAt = DateTime.UtcNow;
-
-        await _requestRepo.UpdateAsync(request);
-        return true;
-    }
-
-    private static GCRDTO MapToDto(GradeChangeRequest x)
-    {
-        return new GCRDTO
+        try
         {
-            Id = x.Id,
-            GradeId = x.GradeId,
-            TeacherId = x.TeacherId,
-            PrincipalId = x.PrincipalId,
-            OriginalGradeValue = x.OriginalGradeValue,
-            RequestedGradeValue = x.RequestedGradeValue,
-            Reason = x.Reason,
-            Status = x.Status,
-            CreatedAt = x.CreatedAt,
-            ReviewedAt = x.ReviewedAt,
-            RejectionReason = x.RejectionReason
-        };
+            await _gcrRepository.AddAsync(request);
+            await _unitOfWork.SaveChangesAsync();
+
+            return new(true, IGCRService.Error.None, Map(request));
+        }
+        catch (Exception ex)
+        {
+            return new(
+                false,
+                IGCRService.Error.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                });
+        }
     }
+
+    public async Task<IGCRService.Result<List<GradeChangeRequestResponseDto>>> GetTeacherPendingAsync(int teacherId)
+    {
+        try
+        {
+            List<GradeChangeRequest> rows = await _gcrRepository.GetTeacherPendingAsync(teacherId);
+            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+        }
+        catch (Exception ex)
+        {
+            return new(
+                false,
+                IGCRService.Error.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                }
+            );
+        }
+    }
+    public async Task<IGCRService.Result<List<GradeChangeRequestResponseDto>>> GetTeacherReviewedAsync(int teacherId)
+    {
+        try
+        {
+            List<GradeChangeRequest> rows = await _gcrRepository.GetTeacherReviewedAsync(teacherId);
+            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+        }
+        catch (Exception ex)
+        {
+            return new(
+                false,
+                IGCRService.Error.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                }
+            );
+        }
+    }
+
+    public async Task<IGCRService.Result<List<GradeChangeRequestResponseDto>>> GetPrincipalPendingAsync(int principalId)
+    {
+        try
+        {
+            List<GradeChangeRequest> rows = await _gcrRepository.GetPrincipalPendingAsync(principalId);
+            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+        }
+        catch (Exception ex)
+        {
+            return new(
+                false,
+                IGCRService.Error.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                }
+            );
+        }
+    }
+
+    public async Task<IGCRService.Result<List<GradeChangeRequestResponseDto>>> GetPrincipalReviewedAsync(int principalId)
+    {
+        try
+        {
+            List<GradeChangeRequest> rows = await _gcrRepository.GetPrincipalReviewedAsync(principalId);
+            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+        }
+        catch (Exception ex)
+        {
+            return new(
+                false,
+                IGCRService.Error.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                }
+            );
+        }
+    }
+
+    public async Task<IGCRService.Result<GradeChangeRequestResponseDto>> ReviewAsync(int principalId, int requestId, ReviewGradeChangeRequestDto dto)
+    {
+        if (requestId <= 0 || dto is null)
+        {
+            return new(false, IGCRService.Error.InvalidInput);
+        }
+
+        GradeChangeRequest? request = await _gcrRepository.GetByIdAsync(requestId);
+        if (request is null)
+        {
+            return new(false, IGCRService.Error.NotFound);
+        }
+        if (request.PrincipalId != principalId)
+        {
+            return new(false, IGCRService.Error.PrincipalNotFound);
+        }
+        if (request.Status != GradeChangeRequestStatus.Pending)
+        {
+            return new(false, IGCRService.Error.NotPendingAnymore);
+        }
+
+        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx = await _unitOfWork.BeginTransactionAsync();
+        try
+        {
+            request.Status = dto.Approve ? GradeChangeRequestStatus.Approved : GradeChangeRequestStatus.Rejected;
+            request.PrincipalComment = string.IsNullOrWhiteSpace(dto.PrincipalComment) ? null : dto.PrincipalComment.Trim();
+            request.ReviewedAt = DateTime.UtcNow;
+
+            if (dto.Approve)
+            {
+                await _gradeRepository.UpdateGradeValueAsync(request.GradeId, request.RequestedGradeValue);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return new(true, IGCRService.Error.None, Map(request));
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            return new(
+                false,
+                IGCRService.Error.Failed,
+                null,
+                new
+                {
+                    message = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    type = ex.GetType().Name
+                }
+            );
+        }
+    }
+
+    private static GradeChangeRequestResponseDto Map(GradeChangeRequest x) => new()
+    {
+        Id = x.Id,
+        GradeId = x.GradeId,
+        TeacherId = x.TeacherId,
+        PrincipalId = x.PrincipalId,
+        OriginalGradeValue = x.OriginalGradeValue,
+        RequestedGradeValue = x.RequestedGradeValue,
+        Reason = x.Reason,
+        PrincipalComment = x.PrincipalComment,
+        Status = x.Status.ToString(),
+        CreatedAt = x.CreatedAt,
+        ReviewedAt = x.ReviewedAt
+    };
 }

@@ -4,7 +4,9 @@ namespace API.DataAccess.Repositories.Abstract;
 
 public interface ITeacherRepository
 {
-    Task<Teacher?> GetByIdAsync(int id);
+    Task<bool> ExistsByEmailAsync(string email);
 
-    Task<List<int>> GetJobCategoryIdsAsync(int teacherId);
+    Task AddAsync(Teacher teacher);
+
+    Task<Teacher?> GetByEmailAsync(string email);
 }

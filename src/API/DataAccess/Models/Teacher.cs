@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-
-namespace API.DataAccess.Models;
+﻿namespace API.DataAccess.Models;
 
 public class Teacher
 {
@@ -11,9 +9,10 @@ public class Teacher
     public string FirstName { get; set; }
 
     public string LastName { get; set; }
-    
+
     public string PasswordHash { get; set; }
 
-    [NotMapped]
-    public string Role { get; } = "Teacher";
+    public string PasswordSalt { get; set; }
+
+    public ICollection<GradeChangeRequest> GradeChangeRequests { get; set; } = new List<GradeChangeRequest>();
 }

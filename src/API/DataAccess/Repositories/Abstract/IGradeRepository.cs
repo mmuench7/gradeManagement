@@ -1,9 +1,10 @@
-﻿using API.DataAccess.Models;
-
-namespace API.DataAccess.Repositories.Abstract;
+﻿namespace API.DataAccess.Repositories.Abstract;
 
 public interface IGradeRepository
 {
-    Task<Grade?> GetByIdAsync(int id);
-    Task UpdateAsync(Grade grade);
+    Task<int?> GetAssignedPrincipalIdByGradeIdAsync(int gradeId);
+
+    Task UpdateGradeValueAsync(int gradeId, decimal newValue);
+
+    Task<(int TeacherId, int CourseId, decimal GradeValue)?> GetBasicsAsync(int gradeId);
 }

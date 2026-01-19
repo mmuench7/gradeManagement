@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-
-namespace API.DataAccess.Models;
+﻿namespace API.DataAccess.Models;
 
 public class Principal
 {
@@ -12,10 +10,11 @@ public class Principal
 
     public string LastName { get; set; }
 
-    public int JobCategoryId { get; set; }
-
     public string PasswordHash { get; set; }
 
-    [NotMapped]
-    public string Role { get; } = "Principal";
+    public string PasswordSalt { get; set; }
+
+    public int JobCategoryId { get; set; }
+
+    public ICollection<GradeChangeRequest> AssignedGradeChangeRequests { get; set; } = new List<GradeChangeRequest>();
 }

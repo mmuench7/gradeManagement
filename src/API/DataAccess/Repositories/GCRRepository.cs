@@ -13,49 +13,55 @@ public class GCRRepository : IGCRRepository
         _dbContext = dbContext;
     }
 
-    public async Task<int> CreateAsync(GradeChangeRequest request)
+    public Task AddAsync(GradeChangeRequest request)
     {
-        _dbContext.GradeChangeRequest.Add(request);
-        await _dbContext.SaveChangesAsync();
-        return request.Id;
+        return _dbContext.GradeChangeRequests.AddAsync(request).AsTask();
     }
 
-    public async Task<GradeChangeRequest?> GetByIdAsync(int id)
+    public Task<GradeChangeRequest?> GetByIdAsync(int id)
     {
-        return await _dbContext.GradeChangeRequest.FirstOrDefaultAsync(x => x.Id == id);
+        return _dbContext.GradeChangeRequests.FirstOrDefaultAsync(x => x.Id == id);
     }
 
-    public async Task<List<GradeChangeRequest>> GetByTeacherIdAsync(int teacherId)
+    public Task<bool> AnyPendingForGradeAsync(int gradeId)
     {
-        return await _dbContext.GradeChangeRequest
-            .Where(x => x.TeacherId == teacherId)
+        return _dbContext.GradeChangeRequests.AnyAsync(x =>
+            x.GradeId == gradeId &&
+            x.Status == GradeChangeRequestStatus.Pending);
+    }
+
+    public Task<List<GradeChangeRequest>> GetTeacherPendingAsync(int teacherId)
+    {
+        return _dbContext.GradeChangeRequests
+            .Where(x => x.TeacherId == teacherId && x.Status == GradeChangeRequestStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
     }
 
-    public async Task<List<GradeChangeRequest>> GetPendingByPrincipalIdAsync(int principalId)
+    public Task<List<GradeChangeRequest>> GetTeacherReviewedAsync(int teacherId)
     {
-        return await _dbContext.GradeChangeRequest
-            .Where(x => x.PrincipalId == principalId && x.Status == "Pending")
+        return _dbContext.GradeChangeRequests
+            .Where(x => x.TeacherId == teacherId &&
+                x.Status == GradeChangeRequestStatus.Approved ||
+                x.Status == GradeChangeRequestStatus.Rejected)
+            .OrderByDescending(x => x.ReviewedAt)
+            .ToListAsync();
+    }
+
+    public Task<List<GradeChangeRequest>> GetPrincipalPendingAsync(int principalId)
+    {
+        return _dbContext.GradeChangeRequests
+            .Where(x => x.PrincipalId == principalId && x.Status == GradeChangeRequestStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
     }
 
-    public async Task UpdateAsync(GradeChangeRequest request)
+    public Task<List<GradeChangeRequest>> GetPrincipalReviewedAsync(int principalId)
     {
-        _dbContext.GradeChangeRequest.Update(request);
-        await _dbContext.SaveChangesAsync();
-    }
-
-    public async Task<GradeChangeRequest?> GetPendingByGradeIdAsync(int gradeId)
-    {
-        return await _dbContext.GradeChangeRequest.FirstOrDefaultAsync(x => x.GradeId == gradeId && x.Status == "Pending");
-    }
-
-    public async Task<List<GradeChangeRequest>> GetHistoryByPrincipalIdAsync(int principalId)
-    {
-        return await _dbContext.GradeChangeRequest
-            .Where(x => x.PrincipalId == principalId && x.Status != "Pending")
+        return _dbContext.GradeChangeRequests
+            .Where(x => x.PrincipalId== principalId &&
+                x.Status == GradeChangeRequestStatus.Approved ||
+                x.Status == GradeChangeRequestStatus.Rejected)
             .OrderByDescending(x => x.ReviewedAt)
             .ToListAsync();
     }

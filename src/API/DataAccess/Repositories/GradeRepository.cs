@@ -1,6 +1,7 @@
 ﻿using API.DataAccess.Models;
 using API.DataAccess.Repositories.Abstract;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace API.DataAccess.Repositories;
 
@@ -13,14 +14,32 @@ public class GradeRepository : IGradeRepository
         _dbContext = dbContext;
     }
 
-    public async Task<Grade?> GetByIdAsync(int id)
+    public async Task<(int TeacherId, int CourseId, decimal GradeValue)?> GetBasicsAsync(int gradeId)
     {
-        return await _dbContext.Grade.FirstOrDefaultAsync(g => g.Id == id);
+        var row = await _dbContext.Grades
+            .Where(g => g.Id == gradeId)
+            .Select(g => new { g.TeacherId, g.CourseId, GradeValue = g.Value })
+            .FirstOrDefaultAsync();
+
+        return row is null ? null : (row.TeacherId, row.CourseId, row.GradeValue);
+    }
+    public async Task<int?> GetAssignedPrincipalIdByGradeIdAsync(int gradeId)
+    {
+        return await _dbContext.Grades
+            .Where(g => g.Id == gradeId)
+            .Join(_dbContext.Courses, g => g.CourseId, c => c.Id, (g, c) => new { c.JobCategoryId })
+            .Join(_dbContext.Principal, x => x.JobCategoryId, p => p.JobCategoryId, (x, p) => p.Id)
+            .FirstOrDefaultAsync();
     }
 
-    public async Task UpdateAsync(Grade grade)
+    public async Task UpdateGradeValueAsync(int gradeId, decimal newValue)
     {
-        _dbContext.Grade.Update(grade);
-        await _dbContext.SaveChangesAsync();
+        Grade? grade = await _dbContext.Grades.FirstOrDefaultAsync(g => g.Id == gradeId);
+        if (grade is null)
+        {
+            return;
+        }
+
+        grade.Value = newValue;
     }
 }
