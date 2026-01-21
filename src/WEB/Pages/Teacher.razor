@@ -33,7 +33,7 @@
  <div class="item-top">
  <div>
  <div class="title">Anfrage #@x.Id</div>
-<div class="sub">Erstellt am <b>@x.CreatedAt.ToString("dd/MM/yyyy HH:mm")</b></div>
+ <div class="sub">Erstellt am <b>@x.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</b></div>
  </div>
  <span class="status status-pending">Wartet auf Antwort</span>
  </div>
@@ -93,7 +93,7 @@
  <td>@g.StudentName</td>
  <td>@g.CourseName (@g.CourseAcronym)</td>
  <td><span class="note-badge">@g.CurrentValue</span></td>
- <td>@g.ExamDate.ToString("dd/MM/yyy")</td>
+ <td>@g.ExamDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
  <td>
  <button class="btn btn-sm btn-primary" @onclick="() => Pick(g)">
  Übernehmen
@@ -127,7 +127,7 @@
  </div>
 
  <button class="btn btn-primary w-100 mt-2" @onclick="CreateRequest" disabled="@busy">
-Anfrage einreichen
+ Anfrage einreichen
  </button>
 </section>
 
@@ -153,7 +153,7 @@ Anfrage einreichen
  <div class="item-top">
  <div>
  <div class="title">Anfrage #@x.Id</div>
-<div class="sub">Erstellt am <b>@x.CreatedAt.ToString("dd/MM/yyyy HH:mm")</b></div>
+ <div class="sub">Erstellt am <b>@x.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</b></div>
  </div>
 
  @if (x.Status?.Equals("Approved", StringComparison.OrdinalIgnoreCase) == true)
@@ -191,7 +191,7 @@ Anfrage einreichen
  }
 
  <div class="time">
-Bearbeitet am <b>@(x.ReviewedAt?.ToString("dd/MM/yyyy HH:mm"))</b>
+ Bearbeitet am <b>@(x.ReviewedAt.HasValue ? x.ReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-")</b>
  </div>
  </div>
  }

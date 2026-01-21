@@ -27,7 +27,7 @@
     }
     else if (pending.Count == 0)
     {
-        <p>Keine ausstehenden Anfragen.</p>
+        <p>Sie haben alle Anfragen bearbeitet.</p>
     }
     else
     {
@@ -45,7 +45,7 @@
                     <div class="item-top">
                         <div>
                             <div class="title">Anfrage #@x.Id</div>
-                            <div class="sub">Erstellt von <b>@teacherLabel</b></div>
+                            <div class="sub">Erstellt von <b>@teacherLabel</b><br />Eingegangen am <b>@x.CreatedAt.ToString("dd/MM/yyy")</b></div>
                         </div>
                         <span class="status status-pending">Wartet auf Antwort</span>
                     </div>
@@ -145,7 +145,7 @@
                     }
 
                     <div class="time">
-                        Reviewed: @(x.ReviewedAt?.ToString("dd/MM/yyy HH:mm") ?? "-")
+                        Reviewed: @(x.ReviewedAt.HasValue ? x.ReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-")
                     </div>
                 </div>
             }
