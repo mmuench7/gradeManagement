@@ -57,4 +57,27 @@ public class CourseRepository : ICourseRepository
     {
         await _dbContext.Courses.AddAsync(course).AsTask();
     }
+
+    public async Task<List<Course>> GetByJobCategoryIdsAsync(IEnumerable<int> jobCategoryIds)
+    {
+        var ids = jobCategoryIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return await _dbContext.Courses
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+        }
+
+        return await _dbContext.Courses
+            .Where(c => ids.Contains(c.JobCategoryId))
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
+
+    public async Task<List<Course>> GetAllAsync()
+    {
+        return await _dbContext.Courses
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
 }

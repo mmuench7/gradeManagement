@@ -4,8 +4,9 @@
 @inject NavigationManager Nav
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
+@using WEB.Services
 
-<PageTitle>Lehrperson</PageTitle>
+<PageTitle>Dashboard</PageTitle>
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -18,11 +19,11 @@
 
 <section class="card">
     <div class="card-head">
-        <h4>Meine Noten</h4>
-        <span class="pill">Klicke „Übernehmen“</span>
+        <h4>Noten</h4>
+        <span class="pill">Wähle „Übernehmen“</span>
     </div>
 
-    <p class="muted">Dann ist unten die Note schon ausgewählt (kein ID-Tippen).</p>
+    <p class="muted">Bitte wählen Sie die gewünste Note aus.</p>
 
     @if (grades is null)
     {
@@ -51,7 +52,7 @@
                         <td>@g.StudentName</td>
                         <td>@g.CourseName (@g.CourseAcronym)</td>
                         <td><span class="note-badge">@g.CurrentValue</span></td>
-                        <td>@g.ExamDate.ToString("yyyy-MM-dd")</td>
+                        <td>@g.ExamDate.ToString("dd/MM/yyy")</td>
                         <td>
                             <button class="btn btn-sm btn-primary" @onclick="() => Pick(g)">
                                 Übernehmen
@@ -66,8 +67,7 @@
 
 <section class="card mt-3">
     <div class="card-head">
-        <h4>Neue Noten-Anfrage</h4>
-        <span class="pill">Teacher → Principal</span>
+        <h4>Änderungsanfrage</h4>
     </div>
 
     <div class="mb-2">
@@ -76,17 +76,17 @@
     </div>
 
     <div class="mb-2">
-        <label class="form-label">Neue Note (1–6)</label>
-        <input class="form-control" @bind="newValueRaw" placeholder="z.B. 5.5" />
+        <label class="form-label">Neuer Notenwert</label>
+        <input class="form-control" @bind="newValueRaw" />
     </div>
 
     <div class="mb-2">
         <label class="form-label">Begründung</label>
-        <textarea class="form-control" rows="3" @bind="reason" placeholder="z.B. Nachprüfung bestanden"></textarea>
+        <textarea class="form-control" rows="3" @bind="reason"></textarea>
     </div>
 
     <button class="btn btn-primary w-100 mt-2" @onclick="CreateRequest" disabled="@busy">
-        @(busy ? "Sende..." : "Anfrage einreichen")
+        Anfrage einreichen
     </button>
 </section>
 
@@ -164,7 +164,7 @@
     private string SelectedInfo
         => selectedGradeId is null
             ? "-"
-            : $"#{selectedGradeId} | {selectedLabel} | aktuell {selectedCurrentValue}";
+            : $"{selectedLabel} (aktuell {selectedCurrentValue})";
 
     private void Pick(GradeRow g)
     {
@@ -191,19 +191,19 @@
 
         if (selectedGradeId is null)
         {
-            error = "Bitte zuerst eine Note auswählen (Übernehmen klicken).";
+            error = "Bitte wählen Sie zuerst eine Note aus.";
             return;
         }
 
         if (!decimal.TryParse(newValueRaw, out var val) || val < 1 || val > 6)
         {
-            error = "Neue Note muss zwischen 1 und 6 sein.";
+            error = "Ungültiger Notenwert.";
             return;
         }
 
         if (string.IsNullOrWhiteSpace(reason))
         {
-            error = "Begründung ist Pflicht.";
+            error = "Bitte geben Sie eine Begründung an.";
             return;
         }
 
@@ -217,7 +217,7 @@
                 Reason = reason
             }, token);
 
-            success = "Anfrage wurde eingereicht.";
+            success = "Anfrage wurde erfolgreich eingereicht.";
             newValueRaw = "";
             reason = "";
         }
@@ -250,9 +250,10 @@
         using var res = await Http.SendAsync(req);
         if (!res.IsSuccessStatusCode)
         {
-            var body = await res.Content.ReadAsStringAsync();
-            throw new Exception($"API Fehler ({(int)res.StatusCode}): {body}");
+            var message = await ApiErrorParser.GetFriendlyMessage(res);
+            throw new Exception(message);
         }
+
         return await res.Content.ReadFromJsonAsync<T>();
     }
 
@@ -264,8 +265,9 @@
 
         using var res = await Http.SendAsync(req);
         var text = await res.Content.ReadAsStringAsync();
+
         if (!res.IsSuccessStatusCode)
-            throw new Exception($"API Fehler ({(int)res.StatusCode}): {text}");
+            throw new Exception(await ApiErrorParser.GetFriendlyMessage(res));
         return text;
     }
 

@@ -11,15 +11,18 @@ public class GCRService : IGCRService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IGradeRepository _gradeRepository;
     private readonly IGCRRepository _gcrRepository;
+    private readonly ITeacherRepository _teacherRepository;
 
     public GCRService(
         IUnitOfWork unitOfWork,
         IGradeRepository gradeRepository,
-        IGCRRepository gcrRepository)
+        IGCRRepository gcrRepository,
+        ITeacherRepository teacherRepository)
     {
         _unitOfWork = unitOfWork;
         _gradeRepository = gradeRepository;
         _gcrRepository = gcrRepository;
+        _teacherRepository = teacherRepository;
     }
 
     public async Task<IGCRService.Result<GradeChangeRequestResponseDto>> CreateAsync(int teacherId, CreateGradeChangeRequestDto dto)
@@ -73,7 +76,8 @@ public class GCRService : IGCRService
             await _gcrRepository.AddAsync(request);
             await _unitOfWork.SaveChangesAsync();
 
-            return new(true, IGCRService.Error.None, Map(request));
+            var mapped = await MapAsync(request);
+            return new(true, IGCRService.Error.None, mapped);
         }
         catch (Exception ex)
         {
@@ -95,7 +99,13 @@ public class GCRService : IGCRService
         try
         {
             List<GradeChangeRequest> rows = await _gcrRepository.GetTeacherPendingAsync(teacherId);
-            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+            var dtos = new List<GradeChangeRequestResponseDto>(rows.Count);
+            foreach (var x in rows)
+            {
+                var dto = await MapAsync(x);
+                dtos.Add(dto);
+            }
+            return new(true, IGCRService.Error.None, dtos);
         }
         catch (Exception ex)
         {
@@ -117,7 +127,13 @@ public class GCRService : IGCRService
         try
         {
             List<GradeChangeRequest> rows = await _gcrRepository.GetTeacherReviewedAsync(teacherId);
-            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+            var dtos = new List<GradeChangeRequestResponseDto>(rows.Count);
+            foreach (var x in rows)
+            {
+                var dto = await MapAsync(x);
+                dtos.Add(dto);
+            }
+            return new(true, IGCRService.Error.None, dtos);
         }
         catch (Exception ex)
         {
@@ -140,7 +156,13 @@ public class GCRService : IGCRService
         try
         {
             List<GradeChangeRequest> rows = await _gcrRepository.GetPrincipalPendingAsync(principalId);
-            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+            var dtos = new List<GradeChangeRequestResponseDto>(rows.Count);
+            foreach (var x in rows)
+            {
+                var dto = await MapAsync(x);
+                dtos.Add(dto);
+            }
+            return new(true, IGCRService.Error.None, dtos);
         }
         catch (Exception ex)
         {
@@ -163,7 +185,13 @@ public class GCRService : IGCRService
         try
         {
             List<GradeChangeRequest> rows = await _gcrRepository.GetPrincipalReviewedAsync(principalId);
-            return new(true, IGCRService.Error.None, rows.Select(Map).ToList());
+            var dtos = new List<GradeChangeRequestResponseDto>(rows.Count);
+            foreach (var x in rows)
+            {
+                var dto = await MapAsync(x);
+                dtos.Add(dto);
+            }
+            return new(true, IGCRService.Error.None, dtos);
         }
         catch (Exception ex)
         {
@@ -217,7 +245,8 @@ public class GCRService : IGCRService
             await _unitOfWork.SaveChangesAsync();
             await tx.CommitAsync();
 
-            return new(true, IGCRService.Error.None, Map(request));
+            var mapped = await MapAsync(request);
+            return new(true, IGCRService.Error.None, mapped);
         }
         catch (Exception ex)
         {
@@ -236,18 +265,30 @@ public class GCRService : IGCRService
         }
     }
 
-    private static GradeChangeRequestResponseDto Map(GradeChangeRequest x) => new()
+    private async Task<GradeChangeRequestResponseDto> MapAsync(GradeChangeRequest x)
     {
-        Id = x.Id,
-        GradeId = x.GradeId,
-        TeacherId = x.TeacherId,
-        PrincipalId = x.PrincipalId,
-        OriginalGradeValue = x.OriginalGradeValue,
-        RequestedGradeValue = x.RequestedGradeValue,
-        Reason = x.Reason,
-        PrincipalComment = x.PrincipalComment,
-        Status = x.Status.ToString(),
-        CreatedAt = x.CreatedAt,
-        ReviewedAt = x.ReviewedAt
-    };
+        var dto = new GradeChangeRequestResponseDto
+        {
+            Id = x.Id,
+            GradeId = x.GradeId,
+            TeacherId = x.TeacherId,
+            PrincipalId = x.PrincipalId,
+            OriginalGradeValue = x.OriginalGradeValue,
+            RequestedGradeValue = x.RequestedGradeValue,
+            Reason = x.Reason,
+            PrincipalComment = x.PrincipalComment,
+            Status = x.Status.ToString(),
+            CreatedAt = x.CreatedAt,
+            ReviewedAt = x.ReviewedAt
+        };
+
+        // Load teacher to get name
+        var teacher = await _teacherRepository.GetByIdAsync(x.TeacherId);
+        if (teacher != null)
+        {
+            dto.TeacherName = teacher.FirstName + " " + teacher.LastName;
+        }
+
+        return dto;
+    }
 }

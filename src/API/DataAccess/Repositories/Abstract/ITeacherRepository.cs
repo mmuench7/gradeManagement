@@ -9,4 +9,6 @@ public interface ITeacherRepository
     Task AddAsync(Teacher teacher);
 
     Task<Teacher?> GetByEmailAsync(string email);
+
+    Task<Teacher?> GetByIdAsync(int id);
 }

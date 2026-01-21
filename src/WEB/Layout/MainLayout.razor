@@ -1,22 +1,28 @@
 ﻿@inherits LayoutComponentBase
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject WEB.Services.AuthState AuthState
 
 <div class="app-shell">
     <!-- HEADER -->
     <header class="topbar">
         <div>
             <div class="brand">Grade Management</div>
-            <div class="subtitle">Schulverwaltungssystem</div>
+            <div class="subtitle">GIBZ</div>
         </div>
 
         <div class="topbar-right">
-            <a class="link" href="/login">Login</a>
-            <a class="link" href="/register">Registrieren</a>
-
-            <button class="btn-outline" @onclick="Logout">
-                Logout
-            </button>
+            @if (!AuthState.IsAuthenticated)
+            {
+                <a class="link" href="/login">Login</a>
+                <a class="link" href="/register">Registrieren</a>
+            }
+            else
+            {
+                <button class="btn-outline" @onclick="Logout">
+                    Logout
+                </button>
+            }
         </div>
     </header>
 
@@ -27,9 +33,22 @@
 </div>
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.AuthChanged += OnAuthChanged;
+        await AuthState.InitializeAsync();
+    }
+
+    private void OnAuthChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
     private async Task Logout()
     {
         await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
-        Nav.NavigateTo("/login", true);
+        await JS.InvokeVoidAsync("localStorage.removeItem", "userType");
+        await AuthState.RefreshAsync();
+        Nav.NavigateTo("/login");
     }
 }

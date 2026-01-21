@@ -8,6 +8,8 @@ public class GradeChangeRequestResponseDto
 
     public int TeacherId { get; set; }
 
+    public string? TeacherName { get; set; } // New: teacher's full name for UI
+
     public int PrincipalId { get; set; }
 
     public decimal OriginalGradeValue { get; set; }

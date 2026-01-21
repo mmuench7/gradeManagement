@@ -36,4 +36,11 @@ public class JobCategoryRepository : IJobCategoryRepository
     {
         await _dbContext.JobCategories.AddAsync(jobCategory).AsTask();
     }
+
+    public async Task<List<JobCategory>> GetAllAsync()
+    {
+        return await _dbContext.JobCategories
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
 }

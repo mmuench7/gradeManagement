@@ -27,4 +27,9 @@ public class TeacherRepository : ITeacherRepository
     {
         return await _dbContext.Teacher.SingleOrDefaultAsync(t => t.Email == email);
     }
+
+    public async Task<Teacher?> GetByIdAsync(int id)
+    {
+        return await _dbContext.Teacher.FindAsync(id).AsTask();
+    }
 }

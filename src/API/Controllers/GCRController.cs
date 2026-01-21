@@ -107,6 +107,16 @@ public class GCRController : ControllerBase
                 return Ok(result.Data);
 
             default:
+                if (HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        code = "FETCH_FAILED",
+                        message = "Internal server error.",
+                        details = result.Details
+                    });
+                }
+
                 return StatusCode(500, new
                 {
                     code = "FETCH_FAILED",
@@ -127,6 +137,16 @@ public class GCRController : ControllerBase
                 return Ok(result.Data);
 
             default:
+                if (HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        code = "FETCH_FAILED",
+                        message = "Internal server error.",
+                        details = result.Details
+                    });
+                }
+
                 return StatusCode(500, new
                 {
                     code = "FETCH_FAILED",
@@ -147,6 +167,16 @@ public class GCRController : ControllerBase
                 return Ok(result.Data);
 
             default:
+                if (HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        code = "FETCH_FAILED",
+                        message = "Internal server error.",
+                        details = result.Details
+                    });
+                }
+
                 return StatusCode(500, new
                 {
                     code = "FETCH_FAILED",
@@ -167,6 +197,16 @@ public class GCRController : ControllerBase
                 return Ok(result.Data);
 
             default:
+                if (HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        code = "FETCH_FAILED",
+                        message = "Internal server error.",
+                        details = result.Details
+                    });
+                }
+
                 return StatusCode(500, new
                 {
                     code = "FETCH_FAILED",

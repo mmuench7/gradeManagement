@@ -38,6 +38,7 @@ public class GCRRepository : IGCRRepository
                 x.TeacherId == teacherId &&
                 x.Status == GradeChangeRequestStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -49,6 +50,7 @@ public class GCRRepository : IGCRRepository
                 (x.Status == GradeChangeRequestStatus.Approved ||
                  x.Status == GradeChangeRequestStatus.Rejected))
             .OrderByDescending(x => x.ReviewedAt)
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -59,6 +61,7 @@ public class GCRRepository : IGCRRepository
                 x.PrincipalId == principalId &&
                 x.Status == GradeChangeRequestStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -70,6 +73,7 @@ public class GCRRepository : IGCRRepository
                 (x.Status == GradeChangeRequestStatus.Approved ||
                  x.Status == GradeChangeRequestStatus.Rejected))
             .OrderByDescending(x => x.ReviewedAt)
+            .AsNoTracking()
             .ToListAsync();
     }
 }

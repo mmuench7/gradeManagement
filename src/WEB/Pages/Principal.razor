@@ -5,7 +5,7 @@
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
 
-<PageTitle>Prorektor</PageTitle>
+<PageTitle>Dashboard</PageTitle>
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -19,7 +19,6 @@
 <section class="card">
     <div class="card-head">
         <h4>Ausstehende Anfragen</h4>
-        <span class="pill">Pending</span>
     </div>
 
     @if (pending is null)
@@ -35,13 +34,20 @@
         <div class="list">
             @foreach (var x in pending)
             {
+                if (x is null)
+                {
+                    continue;
+                }
+
+                var teacherLabel = string.IsNullOrWhiteSpace(x.TeacherName) ? $"#{x.TeacherId}" : x.TeacherName;
+
                 <div class="item">
                     <div class="item-top">
                         <div>
-                            <div class="title">Request #@x.Id</div>
-                            <div class="sub">GradeId: @x.GradeId • TeacherId: @x.TeacherId</div>
+                            <div class="title">Anfrage #@x.Id</div>
+                            <div class="sub">Erstellt von <b>@teacherLabel</b></div>
                         </div>
-                        <span class="status status-pending">PENDING</span>
+                        <span class="status status-pending">Wartet auf Antwort</span>
                     </div>
 
                     <div class="numbers">
@@ -57,18 +63,14 @@
                     </div>
 
                     <div class="reason">
-                        <div class="reason-label">Begründung</div>
+                        <div class="reason-label">Begründung der Lehrperson</div>
                         <div class="reason-text">@x.Reason</div>
                     </div>
 
                     <div class="actions">
-                        <input class="form-control" placeholder="Kommentar (oft Pflicht)" @bind="x._comment" />
-                        <button class="btn btn-success" @onclick="() => Review(x, true)" disabled="@busy">Approve</button>
-                        <button class="btn btn-danger" @onclick="() => Review(x, false)" disabled="@busy">Reject</button>
-                    </div>
-
-                    <div class="time">
-                        Erstellt: @x.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                        <input class="form-control" @bind="x._comment" />
+                        <button class="btn btn-success" @onclick="() => Review(x, true)" disabled="@busy">Akzeptieren</button>
+                        <button class="btn btn-danger" @onclick="() => Review(x, false)" disabled="@busy">Ablehnen</button>
                     </div>
                 </div>
             }
@@ -78,8 +80,7 @@
 
 <section class="card mt-3">
     <div class="card-head">
-        <h4>Bearbeitet</h4>
-        <span class="pill">Reviewed</span>
+        <h4>Verlauf</h4>
     </div>
 
     @if (reviewed is null)
@@ -95,20 +96,27 @@
         <div class="list">
             @foreach (var x in reviewed)
             {
+                if (x is null)
+                {
+                    continue;
+                }
+
+                var teacherLabel = string.IsNullOrWhiteSpace(x.TeacherName) ? $"#{x.TeacherId}" : x.TeacherName;
+
                 <div class="item">
                     <div class="item-top">
                         <div>
-                            <div class="title">Request #@x.Id</div>
-                            <div class="sub">GradeId: @x.GradeId • TeacherId: @x.TeacherId</div>
+                            <div class="title">Anfrage #@x.Id</div>
+                            <div class="sub">Erstellt von <b>@teacherLabel</b></div>
                         </div>
 
                         @if (x.Status?.Equals("Approved", StringComparison.OrdinalIgnoreCase) == true)
                         {
-                            <span class="status status-approved">APPROVED</span>
+                            <span class="status status-approved">Akzeptiert</span>
                         }
                         else if (x.Status?.Equals("Rejected", StringComparison.OrdinalIgnoreCase) == true)
                         {
-                            <span class="status status-rejected">REJECTED</span>
+                            <span class="status status-rejected">Abgelehnt</span>
                         }
                         else
                         {
@@ -131,13 +139,13 @@
                     @if (!string.IsNullOrWhiteSpace(x.PrincipalComment))
                     {
                         <div class="reason">
-                            <div class="reason-label">Kommentar</div>
+                            <div class="reason-label">Ihr Kommentar</div>
                             <div class="reason-text">@x.PrincipalComment</div>
                         </div>
                     }
 
                     <div class="time">
-                        Reviewed: @(x.ReviewedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")
+                        Reviewed: @(x.ReviewedAt?.ToString("dd/MM/yyy HH:mm") ?? "-")
                     </div>
                 </div>
             }
@@ -148,7 +156,7 @@
 <style>
     .card {
         background: white;
-        border: 1px solid #e7ecf3;
+        border: 1px solid #eef2f7;
         border-radius: 14px;
         padding: 16px;
     }
@@ -288,9 +296,9 @@
         margin-top: 12px;
     }
 
-        .actions .form-control {
-            flex: 1;
-        }
+    .actions .form-control {
+        flex: 1;
+    }
 
     .time {
         margin-top: 10px;
@@ -418,5 +426,8 @@
 
         // UI-only field (not in API)
         public string? _comment { get; set; }
+
+        // New: teacher name from API
+        public string? TeacherName { get; set; }
     }
 }

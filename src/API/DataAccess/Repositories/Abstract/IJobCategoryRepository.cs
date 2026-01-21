@@ -11,4 +11,6 @@ public interface IJobCategoryRepository
     Task<Dictionary<int, string>> GetNamesByIdsAsync(IEnumerable<int> ids);
 
     Task AddAsync(JobCategory jobCategory);
+
+    Task<List<JobCategory>> GetAllAsync();
 }

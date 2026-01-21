@@ -15,4 +15,10 @@ public interface ICourseRepository
     Task<List<int>> GetMissingJobCategoryIdsAsync(IEnumerable<int> courseIds, IEnumerable<int> jobCategoryIds);
 
     Task AddAsync(Course course);
+
+    // New: get courses by job category ids (or all if empty)
+    Task<List<Course>> GetByJobCategoryIdsAsync(IEnumerable<int> jobCategoryIds);
+
+    // New: get all courses
+    Task<List<Course>> GetAllAsync();
 }

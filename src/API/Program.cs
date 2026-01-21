@@ -6,10 +6,51 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var problemDetails = new ValidationProblemDetails(context.ModelState)
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Eines oder mehrere Felder sind ungültig.",
+            Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+        };
+
+        // Collect up to2 distinct messages for userMessage, otherwise summarize
+        var messages = context.ModelState.Values
+            .SelectMany(v => v.Errors.Select(e => e.ErrorMessage))
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Distinct()
+            .ToList();
+
+        string userMessage;
+        if (messages.Count == 0)
+        {
+            userMessage = "Ungültige Eingabe.";
+        }
+        else if (messages.Count <= 2)
+        {
+            userMessage = "Ungültige Eingabe: " + string.Join("; ", messages);
+        }
+        else
+        {
+            userMessage = $"Mehrere Fehler: {messages.First()} (und {messages.Count - 1} weitere). Bitte Eingaben überprüfen.";
+        }
+
+        problemDetails.Extensions["userMessage"] = userMessage;
+
+        return new BadRequestObjectResult(problemDetails)
+        {
+            ContentTypes = { "application/problem+json" }
+        };
+    };
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
