@@ -1,4 +1,24 @@
 ﻿@page "/"
+@inject NavigationManager Nav
+@inject WEB.Services.AuthState AuthState
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthState.InitializeAsync();
+        if (AuthState.IsAuthenticated)
+        {
+            if (string.Equals(AuthState.UserType, "Principal", StringComparison.OrdinalIgnoreCase))
+            {
+                Nav.NavigateTo("/principal", true);
+                return;
+            }
+
+            Nav.NavigateTo("/teacher", true);
+            return;
+        }
+    }
+}
 
 <PageTitle>Grade Management</PageTitle>
 
