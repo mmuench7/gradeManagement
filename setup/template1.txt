@@ -1,0 +1,9 @@
+{"email":"regula.tobler@gibz.ch","firstName":"Regula","lastName":"Tobler","password":"Init1234!","jobCategoryId":1}
+
+{"email":"werner.odermatt@gibz.ch","firstName":"Werner","lastName":"Odermatt","password":"Init1234!","jobCategoryId":4}
+
+{"email":"peter.loetscher@gibz.ch","firstName":"Peter","lastName":"Loetscher","password":"Init1234!","jobCategoryId":7}
+
+{"email":"patrick.zeiger@gibz.ch","firstName":"Patrick","lastName":"Zeiger","password":"Init1234!","jobCategoryId":8}
+
+{"email":"alex.kobel@gibz.ch","firstName":"Alex","lastName":"Kobel","password":"Init1234!","jobCategoryId":12}
