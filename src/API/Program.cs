@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using System.Text;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -93,33 +92,7 @@ builder.Services.AddAuthentication(options =>
             };
         });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("DevAdminOnly", policy =>
-        policy.RequireAssertion(ctx =>
-        {
-            if (!builder.Environment.IsDevelopment())
-            {
-                return false;
-            }
-
-            string? email = ctx.User.FindFirst(JwtRegisteredClaimNames.Email)?.Value ??
-                            ctx.User.FindFirst(ClaimTypes.Email)?.Value;
-
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                return false;
-            }
-
-            string[] allowed = builder.Configuration
-                .GetSection("DevAdmin:Emails")
-                .Get<string[]>() ?? Array.Empty<string>();
-
-            return allowed.Any(a =>
-                !string.IsNullOrWhiteSpace(a) &&
-                a.Equals(email, StringComparison.OrdinalIgnoreCase));
-        }));
-});
+builder.Services.AddAuthorization();
 
 WebApplication app = builder.Build();
 

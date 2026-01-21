@@ -1,6 +1,5 @@
 ﻿using API.Services;
 using API.Services.Abstract;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.DTOs.Dev;
 
@@ -8,7 +7,6 @@ namespace API.Controllers;
 
 [ApiController]
 [Route("api/dev")]
-[Authorize(Policy = "DevAdminOnly")]
 public class DevController : ControllerBase
 {
     private readonly IDevService _devService;
