@@ -1,0 +1,281 @@
+﻿@page "/teacher"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+
+<PageTitle>Lehrperson</PageTitle>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">@success</div>
+}
+
+<section class="card">
+    <div class="card-head">
+        <h4>Meine Noten</h4>
+        <span class="pill">Klicke „Übernehmen“</span>
+    </div>
+
+    <p class="muted">Dann ist unten die Note schon ausgewählt (kein ID-Tippen).</p>
+
+    @if (grades is null)
+    {
+        <p><em>Lade...</em></p>
+    }
+    else if (grades.Count == 0)
+    {
+        <p>Keine Noten gefunden.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Schüler</th>
+                    <th>Fach</th>
+                    <th>Note</th>
+                    <th>Datum</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var g in grades)
+                {
+                    <tr class="@(selectedGradeId == g.GradeId ? "selected" : "")">
+                        <td>@g.StudentName</td>
+                        <td>@g.CourseName (@g.CourseAcronym)</td>
+                        <td><span class="note-badge">@g.CurrentValue</span></td>
+                        <td>@g.ExamDate.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" @onclick="() => Pick(g)">
+                                Übernehmen
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<section class="card mt-3">
+    <div class="card-head">
+        <h4>Neue Noten-Anfrage</h4>
+        <span class="pill">Teacher → Principal</span>
+    </div>
+
+    <div class="mb-2">
+        <label class="form-label">Ausgewählte Note</label>
+        <input class="form-control" value="@SelectedInfo" disabled />
+    </div>
+
+    <div class="mb-2">
+        <label class="form-label">Neue Note (1–6)</label>
+        <input class="form-control" @bind="newValueRaw" placeholder="z.B. 5.5" />
+    </div>
+
+    <div class="mb-2">
+        <label class="form-label">Begründung</label>
+        <textarea class="form-control" rows="3" @bind="reason" placeholder="z.B. Nachprüfung bestanden"></textarea>
+    </div>
+
+    <button class="btn btn-primary w-100 mt-2" @onclick="CreateRequest" disabled="@busy">
+        @(busy ? "Sende..." : "Anfrage einreichen")
+    </button>
+</section>
+
+<style>
+    .card {
+        background: white;
+        border: 1px solid #e7ecf3;
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .muted {
+        color: #667085;
+        font-size: 12px;
+        margin-top: 6px;
+    }
+
+    .pill {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #f2f4f7;
+        color: #344054;
+    }
+
+    tr.selected {
+        background: #f0f9ff;
+    }
+
+    /* NOTE BADGE: deutlich sichtbar */
+    .note-badge {
+        display: inline-block;
+        min-width: 46px;
+        text-align: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #2563eb; /* kräftig */
+        color: white;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        box-shadow: 0 1px 0 rgba(16,24,40,0.06);
+    }
+</style>
+
+@code {
+    private string? error;
+    private string? success;
+    private bool busy;
+
+    private List<GradeRow>? grades;
+
+    private int? selectedGradeId;
+    private decimal? selectedCurrentValue;
+    private string selectedLabel = "";
+
+    private string newValueRaw = "";
+    private string reason = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await GetTokenOrRedirect();
+        if (token is null) return;
+
+        await LoadGrades(token);
+    }
+
+    private string SelectedInfo
+        => selectedGradeId is null
+            ? "-"
+            : $"#{selectedGradeId} | {selectedLabel} | aktuell {selectedCurrentValue}";
+
+    private void Pick(GradeRow g)
+    {
+        selectedGradeId = g.GradeId;
+        selectedCurrentValue = g.CurrentValue;
+        selectedLabel = $"{g.StudentName} - {g.CourseAcronym}";
+        success = null;
+        error = null;
+    }
+
+    private async Task LoadGrades(string token)
+    {
+        error = null;
+        grades = await SendGet<List<GradeRow>>("grades/mine", token) ?? new();
+    }
+
+    private async Task CreateRequest()
+    {
+        var token = await GetTokenOrRedirect();
+        if (token is null) return;
+
+        error = null;
+        success = null;
+
+        if (selectedGradeId is null)
+        {
+            error = "Bitte zuerst eine Note auswählen (Übernehmen klicken).";
+            return;
+        }
+
+        if (!decimal.TryParse(newValueRaw, out var val) || val < 1 || val > 6)
+        {
+            error = "Neue Note muss zwischen 1 und 6 sein.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            error = "Begründung ist Pflicht.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            await SendPostRaw("gradechangerequest", new
+            {
+                GradeId = selectedGradeId.Value,
+                RequestedGradeValue = val,
+                Reason = reason
+            }, token);
+
+            success = "Anfrage wurde eingereicht.";
+            newValueRaw = "";
+            reason = "";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task<string?> GetTokenOrRedirect()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Nav.NavigateTo("/login", true);
+            return null;
+        }
+        return token;
+    }
+
+    private async Task<T?> SendGet<T>(string relativeUrl, string token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var res = await Http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            throw new Exception($"API Fehler ({(int)res.StatusCode}): {body}");
+        }
+        return await res.Content.ReadFromJsonAsync<T>();
+    }
+
+    private async Task<string> SendPostRaw(string relativeUrl, object body, string token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Content = JsonContent.Create(body);
+
+        using var res = await Http.SendAsync(req);
+        var text = await res.Content.ReadAsStringAsync();
+        if (!res.IsSuccessStatusCode)
+            throw new Exception($"API Fehler ({(int)res.StatusCode}): {text}");
+        return text;
+    }
+
+    private class GradeRow
+    {
+        public int GradeId { get; set; }
+        public string StudentName { get; set; } = "";
+        public string CourseName { get; set; } = "";
+        public string CourseAcronym { get; set; } = "";
+        public decimal CurrentValue { get; set; }
+        public DateTime ExamDate { get; set; }
+    }
+}

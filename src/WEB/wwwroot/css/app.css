@@ -101,3 +101,64 @@ a, .btn-link {
 code {
     color: #c02d76;
 }
+
+.app-shell {
+    min-height: 100vh;
+    background: #f6f8fb;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: white;
+    border-bottom: 1px solid #e7ecf3;
+}
+
+.brand {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 12px;
+    color: #667085;
+    margin-top: 2px;
+}
+
+.topbar-right {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.link {
+    color: #344054;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+    .link:hover {
+        background: #f2f4f7;
+    }
+
+.content {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px;
+}
+
+.btn-outline {
+    border: 1px solid #d0d5dd;
+    background: white;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+    .btn-outline:hover {
+        background: #f2f4f7;
+    }

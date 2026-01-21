@@ -26,6 +26,12 @@ public class AppDbContext : DbContext
 
     public DbSet<Grade> Grades { get; set; }
 
+    public DbSet<API.DataAccess.Models.PrincipalJobCategory> PrincipalJobCategories { get; set; }
+
+    public DbSet<API.DataAccess.Models.Student> Students { get; set; }
+
+
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Teacher>().ToTable("teacher");
@@ -90,5 +96,13 @@ public class AppDbContext : DbContext
             .WithMany(p => p.AssignedGradeChangeRequests)
             .HasForeignKey(gcr => gcr.PrincipalId)
             .HasConstraintName("fk_gcr_principal");
+        modelBuilder.Entity<API.DataAccess.Models.PrincipalJobCategory>()
+    .ToTable("principal_job_category");
+
+        modelBuilder.Entity<API.DataAccess.Models.PrincipalJobCategory>()
+            .HasKey(x => new { x.PrincipalId, x.JobCategoryId });
+        modelBuilder.Entity<API.DataAccess.Models.Student>().ToTable("student");
+
+
     }
 }

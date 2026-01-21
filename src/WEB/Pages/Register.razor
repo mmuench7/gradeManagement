@@ -1,0 +1,147 @@
+﻿@page "/register"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using System.Net.Http.Json
+
+<PageTitle>Register</PageTitle>
+
+<h3>Register (Teacher)</h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">@success</div>
+}
+
+<div style="max-width: 520px;">
+    <div class="mb-3">
+        <label class="form-label">Email - gibz.ch</label>
+        <input class="form-control" @bind="email" />
+    </div>
+
+    <div class="row">
+        <div class="col mb-3">
+            <label class="form-label">Vorname</label>
+            <input class="form-control" @bind="firstName" />
+        </div>
+        <div class="col mb-3">
+            <label class="form-label">Nachname</label>
+            <input class="form-control" @bind="lastName" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Passwort</label>
+        <input type="password" class="form-control" @bind="password" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">JobCategoryIds (kommagetrennt, z.B. 1,2)</label>
+        <input class="form-control" @bind="jobCategoryIdsRaw" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">CourseIds (kommagetrennt, z.B. 1,3)</label>
+        <input class="form-control" @bind="courseIdsRaw" />
+    </div>
+
+    <button class="btn btn-primary" @onclick="DoRegister" disabled="@isLoading">
+        @(isLoading ? "Register..." : "Register")
+    </button>
+</div>
+
+@code {
+    private string email = "";
+    private string firstName = "";
+    private string lastName = "";
+    private string password = "";
+    private string jobCategoryIdsRaw = "";
+    private string courseIdsRaw = "";
+
+    private string? error;
+    private string? success;
+    private bool isLoading = false;
+
+    private async Task DoRegister()
+    {
+        error = null;
+        success = null;
+        isLoading = true;
+
+        try
+        {
+            var jobIds = ParseIds(jobCategoryIdsRaw);
+            var courseIds = ParseIds(courseIdsRaw);
+
+            var res = await Http.PostAsJsonAsync("auth/register", new RegisterRequest
+            {
+                Email = email,
+                FirstName = firstName,
+                LastName = lastName,
+                Password = password,
+                JobCategoryIds = jobIds,
+                CourseIds = courseIds
+            });
+
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+            {
+                error = $"Register fehlgeschlagen ({(int)res.StatusCode}).\n{body}";
+                return;
+            }
+
+            var data = await res.Content.ReadFromJsonAsync<AuthResponse>();
+            if (data is null || string.IsNullOrWhiteSpace(data.JwtToken))
+            {
+                success = "Registriert. Bitte einloggen.";
+                Nav.NavigateTo("/login");
+                return;
+            }
+
+            await JS.InvokeVoidAsync("localStorage.setItem", "jwt", data.JwtToken);
+            await JS.InvokeVoidAsync("localStorage.setItem", "userType", data.UserType);
+
+            success = "Registriert & eingeloggt.";
+            Nav.NavigateTo("/teacher");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static List<int> ParseIds(string raw)
+    {
+        return raw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => int.TryParse(s, out var n) ? n : 0)
+            .Where(n => n > 0)
+            .Distinct()
+            .ToList();
+    }
+
+    private class RegisterRequest
+    {
+        public string Email { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Password { get; set; } = "";
+        public List<int> JobCategoryIds { get; set; } = new();
+        public List<int> CourseIds { get; set; } = new();
+    }
+
+    private class AuthResponse
+    {
+        public string JwtToken { get; set; } = "";
+        public string UserType { get; set; } = "";
+    }
+}

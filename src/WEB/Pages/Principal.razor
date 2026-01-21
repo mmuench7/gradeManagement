@@ -1,0 +1,422 @@
+﻿@page "/principal"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+
+<PageTitle>Prorektor</PageTitle>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">@success</div>
+}
+
+<section class="card">
+    <div class="card-head">
+        <h4>Ausstehende Anfragen</h4>
+        <span class="pill">Pending</span>
+    </div>
+
+    @if (pending is null)
+    {
+        <p><em>Lade...</em></p>
+    }
+    else if (pending.Count == 0)
+    {
+        <p>Keine ausstehenden Anfragen.</p>
+    }
+    else
+    {
+        <div class="list">
+            @foreach (var x in pending)
+            {
+                <div class="item">
+                    <div class="item-top">
+                        <div>
+                            <div class="title">Request #@x.Id</div>
+                            <div class="sub">GradeId: @x.GradeId • TeacherId: @x.TeacherId</div>
+                        </div>
+                        <span class="status status-pending">PENDING</span>
+                    </div>
+
+                    <div class="numbers">
+                        <div class="num-box">
+                            <div class="num-label">Alt</div>
+                            <div class="num">@x.OriginalGradeValue</div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="num-box">
+                            <div class="num-label">Neu</div>
+                            <div class="num strong">@x.RequestedGradeValue</div>
+                        </div>
+                    </div>
+
+                    <div class="reason">
+                        <div class="reason-label">Begründung</div>
+                        <div class="reason-text">@x.Reason</div>
+                    </div>
+
+                    <div class="actions">
+                        <input class="form-control" placeholder="Kommentar (oft Pflicht)" @bind="x._comment" />
+                        <button class="btn btn-success" @onclick="() => Review(x, true)" disabled="@busy">Approve</button>
+                        <button class="btn btn-danger" @onclick="() => Review(x, false)" disabled="@busy">Reject</button>
+                    </div>
+
+                    <div class="time">
+                        Erstellt: @x.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+<section class="card mt-3">
+    <div class="card-head">
+        <h4>Bearbeitet</h4>
+        <span class="pill">Reviewed</span>
+    </div>
+
+    @if (reviewed is null)
+    {
+        <p><em>Lade...</em></p>
+    }
+    else if (reviewed.Count == 0)
+    {
+        <p>Keine bearbeiteten Anfragen.</p>
+    }
+    else
+    {
+        <div class="list">
+            @foreach (var x in reviewed)
+            {
+                <div class="item">
+                    <div class="item-top">
+                        <div>
+                            <div class="title">Request #@x.Id</div>
+                            <div class="sub">GradeId: @x.GradeId • TeacherId: @x.TeacherId</div>
+                        </div>
+
+                        @if (x.Status?.Equals("Approved", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            <span class="status status-approved">APPROVED</span>
+                        }
+                        else if (x.Status?.Equals("Rejected", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            <span class="status status-rejected">REJECTED</span>
+                        }
+                        else
+                        {
+                            <span class="status status-pending">@x.Status</span>
+                        }
+                    </div>
+
+                    <div class="numbers">
+                        <div class="num-box">
+                            <div class="num-label">Alt</div>
+                            <div class="num">@x.OriginalGradeValue</div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="num-box">
+                            <div class="num-label">Neu</div>
+                            <div class="num strong">@x.RequestedGradeValue</div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(x.PrincipalComment))
+                    {
+                        <div class="reason">
+                            <div class="reason-label">Kommentar</div>
+                            <div class="reason-text">@x.PrincipalComment</div>
+                        </div>
+                    }
+
+                    <div class="time">
+                        Reviewed: @(x.ReviewedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+<style>
+    .card {
+        background: white;
+        border: 1px solid #e7ecf3;
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .pill {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #f2f4f7;
+        color: #344054;
+    }
+
+    .list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .item {
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        padding: 14px;
+        background: #fcfdff;
+    }
+
+    .item-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .title {
+        font-weight: 800;
+    }
+
+    .sub {
+        color: #667085;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+
+    .status {
+        font-size: 12px;
+        font-weight: 800;
+        padding: 6px 10px;
+        border-radius: 999px;
+        letter-spacing: 0.3px;
+        border: 1px solid transparent;
+    }
+
+    .status-pending {
+        background: #fff7ed;
+        color: #9a3412;
+        border-color: #fed7aa;
+    }
+
+    .status-approved {
+        background: #ecfdf3;
+        color: #067647;
+        border-color: #abefc6;
+    }
+
+    .status-rejected {
+        background: #fef3f2;
+        color: #b42318;
+        border-color: #fecdca;
+    }
+
+    .numbers {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .num-box {
+        background: white;
+        border: 1px solid #e7ecf3;
+        border-radius: 12px;
+        padding: 10px 12px;
+        min-width: 110px;
+    }
+
+    .num-label {
+        font-size: 11px;
+        color: #667085;
+        font-weight: 700;
+    }
+
+    .num {
+        font-size: 18px;
+        font-weight: 800;
+        color: #101828;
+    }
+
+    .strong {
+        color: #1d4ed8;
+    }
+
+    .arrow {
+        font-weight: 900;
+        color: #98a2b3;
+    }
+
+    .reason {
+        margin-top: 10px;
+    }
+
+    .reason-label {
+        font-size: 11px;
+        color: #667085;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .reason-text {
+        margin-top: 4px;
+        font-weight: 600;
+        color: #344054;
+    }
+
+    .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+    }
+
+        .actions .form-control {
+            flex: 1;
+        }
+
+    .time {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #667085;
+    }
+</style>
+
+@code {
+    private string? error;
+    private string? success;
+    private bool busy;
+
+    private List<GcrItem>? pending;
+    private List<GcrItem>? reviewed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await GetTokenOrRedirect();
+        if (token is null) return;
+
+        await LoadLists(token);
+    }
+
+    private async Task LoadLists(string token)
+    {
+        error = null;
+        success = null;
+
+        pending = await SendGet<List<GcrItem>>("gradechangerequest/principal/pending", token) ?? new();
+        reviewed = await SendGet<List<GcrItem>>("gradechangerequest/principal/reviewed", token) ?? new();
+    }
+
+    private async Task Review(GcrItem x, bool approve)
+    {
+        var token = await GetTokenOrRedirect();
+        if (token is null) return;
+
+        error = null;
+        success = null;
+
+        busy = true;
+        try
+        {
+            // Wenn deine API Kommentar "required" macht, erzwingen wir es hier:
+            if (string.IsNullOrWhiteSpace(x._comment))
+            {
+                error = "Kommentar ist erforderlich.";
+                return;
+            }
+
+            await SendPostRaw($"gradechangerequest/{x.Id}/review", new
+            {
+                Approve = approve,
+                PrincipalComment = x._comment
+            }, token);
+
+            success = approve ? "Anfrage wurde genehmigt." : "Anfrage wurde abgelehnt.";
+            await LoadLists(token);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task<string?> GetTokenOrRedirect()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Nav.NavigateTo("/login", true);
+            return null;
+        }
+        return token;
+    }
+
+    private async Task<T?> SendGet<T>(string relativeUrl, string token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var res = await Http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            throw new Exception($"API Fehler ({(int)res.StatusCode}): {body}");
+        }
+
+        return await res.Content.ReadFromJsonAsync<T>();
+    }
+
+    private async Task<string> SendPostRaw(string relativeUrl, object body, string token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Content = JsonContent.Create(body);
+
+        using var res = await Http.SendAsync(req);
+        var text = await res.Content.ReadAsStringAsync();
+
+        if (!res.IsSuccessStatusCode)
+            throw new Exception($"API Fehler ({(int)res.StatusCode}): {text}");
+
+        return text;
+    }
+
+    private class GcrItem
+    {
+        public int Id { get; set; }
+        public int GradeId { get; set; }
+        public int TeacherId { get; set; }
+        public int PrincipalId { get; set; }
+        public decimal OriginalGradeValue { get; set; }
+        public decimal RequestedGradeValue { get; set; }
+        public string Reason { get; set; } = "";
+        public string? PrincipalComment { get; set; }
+        public string Status { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ReviewedAt { get; set; }
+
+        // UI-only field (not in API)
+        public string? _comment { get; set; }
+    }
+}

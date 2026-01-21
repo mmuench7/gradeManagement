@@ -1,0 +1,90 @@
+﻿@page "/login"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using System.Net.Http.Json
+
+<PageTitle>Login</PageTitle>
+
+<h3>Login</h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div style="max-width: 420px;">
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input class="form-control" @bind="email" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Passwort</label>
+        <input type="password" class="form-control" @bind="password" />
+    </div>
+
+    <button class="btn btn-primary" @onclick="DoLogin" disabled="@busy">
+        @(busy ? "Login..." : "Login")
+    </button>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string? error;
+    private bool busy;
+
+    private async Task DoLogin()
+    {
+        error = null;
+        busy = true;
+
+        try
+        {
+            var res = await Http.PostAsJsonAsync("auth/login", new
+            {
+                email,
+                password
+            });
+
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+            {
+                error = $"Login fehlgeschlagen ({(int)res.StatusCode}).";
+                return;
+            }
+
+            var data = await res.Content.ReadFromJsonAsync<AuthResponse>();
+            if (data is null || string.IsNullOrWhiteSpace(data.JwtToken))
+            {
+                error = "Ungültige Server-Antwort.";
+                return;
+            }
+
+            await JS.InvokeVoidAsync("localStorage.setItem", "jwt", data.JwtToken);
+            await JS.InvokeVoidAsync("localStorage.setItem", "userType", data.UserType);
+
+            // Redirect je nach Rolle
+            if (string.Equals(data.UserType, "Principal", StringComparison.OrdinalIgnoreCase))
+                Nav.NavigateTo("/principal");
+            else
+                Nav.NavigateTo("/teacher");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private class AuthResponse
+    {
+        public string JwtToken { get; set; } = "";
+        public string UserType { get; set; } = "";
+    }
+}

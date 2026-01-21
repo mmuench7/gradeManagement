@@ -20,7 +20,8 @@ public class GCRRepository : IGCRRepository
 
     public Task<GradeChangeRequest?> GetByIdAsync(int id)
     {
-        return _dbContext.GradeChangeRequests.FirstOrDefaultAsync(x => x.Id == id);
+        return _dbContext.GradeChangeRequests
+            .FirstOrDefaultAsync(x => x.Id == id);
     }
 
     public Task<bool> AnyPendingForGradeAsync(int gradeId)
@@ -33,7 +34,9 @@ public class GCRRepository : IGCRRepository
     public Task<List<GradeChangeRequest>> GetTeacherPendingAsync(int teacherId)
     {
         return _dbContext.GradeChangeRequests
-            .Where(x => x.TeacherId == teacherId && x.Status == GradeChangeRequestStatus.Pending)
+            .Where(x =>
+                x.TeacherId == teacherId &&
+                x.Status == GradeChangeRequestStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
     }
@@ -41,9 +44,10 @@ public class GCRRepository : IGCRRepository
     public Task<List<GradeChangeRequest>> GetTeacherReviewedAsync(int teacherId)
     {
         return _dbContext.GradeChangeRequests
-            .Where(x => x.TeacherId == teacherId &&
-                x.Status == GradeChangeRequestStatus.Approved ||
-                x.Status == GradeChangeRequestStatus.Rejected)
+            .Where(x =>
+                x.TeacherId == teacherId &&
+                (x.Status == GradeChangeRequestStatus.Approved ||
+                 x.Status == GradeChangeRequestStatus.Rejected))
             .OrderByDescending(x => x.ReviewedAt)
             .ToListAsync();
     }
@@ -51,7 +55,9 @@ public class GCRRepository : IGCRRepository
     public Task<List<GradeChangeRequest>> GetPrincipalPendingAsync(int principalId)
     {
         return _dbContext.GradeChangeRequests
-            .Where(x => x.PrincipalId == principalId && x.Status == GradeChangeRequestStatus.Pending)
+            .Where(x =>
+                x.PrincipalId == principalId &&
+                x.Status == GradeChangeRequestStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
     }
@@ -59,9 +65,10 @@ public class GCRRepository : IGCRRepository
     public Task<List<GradeChangeRequest>> GetPrincipalReviewedAsync(int principalId)
     {
         return _dbContext.GradeChangeRequests
-            .Where(x => x.PrincipalId== principalId &&
-                x.Status == GradeChangeRequestStatus.Approved ||
-                x.Status == GradeChangeRequestStatus.Rejected)
+            .Where(x =>
+                x.PrincipalId == principalId &&
+                (x.Status == GradeChangeRequestStatus.Approved ||
+                 x.Status == GradeChangeRequestStatus.Rejected))
             .OrderByDescending(x => x.ReviewedAt)
             .ToListAsync();
     }

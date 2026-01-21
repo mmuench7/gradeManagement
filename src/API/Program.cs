@@ -51,6 +51,23 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 builder.Services.AddServiceLayer(builder.Configuration);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+    {
+        policy
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()
+            .WithOrigins(
+                "http://localhost:7046",
+                "https://localhost:7046",
+                "http://127.0.0.1:7046",
+                "https://127.0.0.1:7046"
+            );
+    });
+});
+
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 builder.Services.AddAuthentication(options =>
@@ -126,6 +143,8 @@ else
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("FrontendPolicy");
 
 app.UseAuthentication();
 app.UseAuthorization();

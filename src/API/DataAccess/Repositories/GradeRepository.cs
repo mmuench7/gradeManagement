@@ -27,10 +27,17 @@ public class GradeRepository : IGradeRepository
     {
         return await _dbContext.Grades
             .Where(g => g.Id == gradeId)
-            .Join(_dbContext.Courses, g => g.CourseId, c => c.Id, (g, c) => new { c.JobCategoryId })
-            .Join(_dbContext.Principal, x => x.JobCategoryId, p => p.JobCategoryId, (x, p) => p.Id)
+            .Join(_dbContext.Courses,
+                  g => g.CourseId,
+                  c => c.Id,
+                  (g, c) => c.JobCategoryId)
+            .Join(_dbContext.PrincipalJobCategories,
+                  jobCategoryId => jobCategoryId,
+                  pjc => pjc.JobCategoryId,
+                  (jobCategoryId, pjc) => pjc.PrincipalId)
             .FirstOrDefaultAsync();
     }
+
 
     public async Task UpdateGradeValueAsync(int gradeId, decimal newValue)
     {

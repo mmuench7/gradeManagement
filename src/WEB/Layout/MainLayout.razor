@@ -1,16 +1,35 @@
 ﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inject IJSRuntime JS
+@inject NavigationManager Nav
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+<div class="app-shell">
+    <!-- HEADER -->
+    <header class="topbar">
+        <div>
+            <div class="brand">Grade Management</div>
+            <div class="subtitle">Schulverwaltungssystem</div>
         </div>
 
-        <article class="content px-4">
-            @Body
-        </article>
+        <div class="topbar-right">
+            <a class="link" href="/login">Login</a>
+            <a class="link" href="/register">Registrieren</a>
+
+            <button class="btn-outline" @onclick="Logout">
+                Logout
+            </button>
+        </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="content">
+        @Body
     </main>
 </div>
+
+@code {
+    private async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+        Nav.NavigateTo("/login", true);
+    }
+}
