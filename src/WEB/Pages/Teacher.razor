@@ -6,7 +6,7 @@
 @using System.Net.Http.Json
 @using WEB.Services
 
-<PageTitle>Lehrperson</PageTitle>
+<PageTitle>Dashboard</PageTitle>
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -416,19 +416,19 @@ Bearbeitet am <b>@(x.ReviewedAt?.ToString("dd/MM/yyyy HH:mm"))</b>
 
  if (selectedGradeId is null)
  {
- error = "Bitte zuerst eine Note auswählen (Übernehmen klicken).";
+ error = "Bitte wählen Sie zuerst eine Note aus.";
  return;
  }
 
  if (!decimal.TryParse(newValueRaw, out var val) || val <1 || val >6)
  {
- error = "Neue Note muss zwischen1 und6 sein.";
+ error = "Inkorrekter Notenwert.";
  return;
  }
 
  if (string.IsNullOrWhiteSpace(reason))
  {
- error = "Begründung ist Pflicht.";
+ error = "Bitte verfassen Sie eine Begründung.";
  return;
  }
 
