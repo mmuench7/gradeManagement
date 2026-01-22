@@ -63,7 +63,7 @@
 <section class="card">
  <div class="card-head">
  <h4>Noten</h4>
- <span class="pill">Klicke „Übernehmen"</span>
+ <span class="pill">Klicke „Neue Anfrage"</span>
  </div>
 
  @if (grades is null)
@@ -96,7 +96,7 @@
  <td>@g.ExamDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
  <td>
  <button class="btn btn-sm btn-primary" @onclick="() => Pick(g)">
- Übernehmen
+Neue Anfrage
  </button>
  </td>
  </tr>
