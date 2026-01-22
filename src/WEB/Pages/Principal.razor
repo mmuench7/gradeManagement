@@ -145,7 +145,7 @@
                     }
 
                     <div class="time">
-                        Reviewed: @(x.ReviewedAt.HasValue ? x.ReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-")
+                        Bearbeitet am <b>@(x.ReviewedAt.HasValue? x.ReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-")</b>
                     </div>
                 </div>
             }
